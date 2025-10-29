@@ -1,0 +1,50 @@
+# .gitignore 파일
+# 이 파일에 명시된 파일/폴더는 Git이 추적하지 않습니다.
+
+### JetBrains/IntelliJ ###
+# 인텔리제이의 프로젝트 설정 파일. (개인 설정이므로 공유 X)
+.idea/
+
+### Python (Server) ###
+# 1. 가상 환경 (venv) 폴더
+# 라이브러리가 설치되는 곳이며, 용량이 매우 크고 OS마다 다릅니다.
+venv/
+*.venv/
+env/
+
+# 2. 파이썬 캐시 파일
+# 실행 속도를 높이기 위해 자동으로 생성되는 캐시입니다.
+__pycache__/
+*.pyc
+
+# 3. 환경 변수 파일
+# API 키, 비밀번호 등 민감한 정보가 들어갑니다. (절대 공유 금지!)
+.env
+.env.*
+
+# 4. 빌드 및 배포 관련
+build/
+dist/
+*.egg-info/
+
+### Client (Web) ###
+# 1. Node.js 의존성 폴더
+# (npm install 시 생성) 용량이 어마어마하게 큽니다.
+node_modules/
+
+# 2. 프로덕션 빌드 폴더
+# (npm run build 시 생성)
+build/
+dist/
+.out/
+
+# 3. 로그 파일
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+### OS (Windows, macOS, Linux) ###
+# 운영체제가 자동으로 생성하는 시스템 파일
+.DS_Store
+Thumbs.db
+desktop.ini
