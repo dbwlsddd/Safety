@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+fastapi-cors
+ultralytics
+opencv-python-headless
+numpy
