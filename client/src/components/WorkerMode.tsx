@@ -9,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator'; // 버튼 사이에 분리선 추가를 위해 Separator import
+import { Separator } from '@/components/ui/separator';
 import type { Screen } from '../App';
 
 // ==================================================================
@@ -46,7 +46,7 @@ export function WorkerMode({ onBack }: WorkerModeProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // ... (웹소켓 및 웹캠 연결 useEffect 로직은 변경 없이 유지) ...
+  // 1. 컴포넌트 마운트 시 웹캠 켜기 및 웹소켓 연결 (로직 유지)
   useEffect(() => {
     let stream: MediaStream | undefined;
 
@@ -193,26 +193,29 @@ export function WorkerMode({ onBack }: WorkerModeProps) {
 
   // 요청하신 헤더 컴포넌트 (모든 버튼 통합)
   const Header = () => (
-      // flex-shrink-0: 헤더 높이 고정
+      // justify-between: 왼쪽/중앙/오른쪽 요소를 분리 배치
       <header className="flex-shrink-0 flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950">
 
-        {/* 1. 왼쪽에 [모드 선택] 버튼 */}
-        <Button
-            variant="ghost"
-            onClick={onBack}
-            className="text-gray-400 hover:text-white hover:bg-slate-800/50 p-2 h-auto rounded-full text-sm"
-        >
-          <ChevronLeft className="h-5 w-5 mr-1" />
-          모드 선택
-        </Button>
+        {/* 1. 왼쪽 영역 (모드 선택 버튼) */}
+        <div className="flex-shrink-0">
+          <Button
+              variant="ghost"
+              onClick={onBack}
+              className="text-gray-400 hover:text-white hover:bg-slate-800/50 p-2 h-auto rounded-full text-sm"
+          >
+            <ChevronLeft className="h-5 w-5 mr-1" />
+            모드 선택
+          </Button>
+        </div>
 
-        {/* 2. 가운데에 본인확인 (1/2 단계) 텍스트 */}
-        <h1 className="text-lg font-semibold text-white absolute left-1/2 transform -translate-x-1/2 whitespace-nowrap">
+        {/* 2. 중앙 영역 (본인확인 단계 텍스트): flex-grow를 사용하여 남은 공간을 확보하고 텍스트를 중앙 정렬 */}
+        {/* absolute 포지셔닝을 제거하고 Flexbox 레이아웃에 완전히 통합하여 헤더를 따라다니도록 수정 */}
+        <h1 className="text-lg font-semibold text-white text-center flex-grow">
           본인확인 ({step}/2 단계)
         </h1>
 
-        {/* 3. 오른쪽에 모든 액션 버튼 통합 */}
-        <div className="flex items-center space-x-2">
+        {/* 3. 오른쪽 영역 (모든 액션 버튼 통합) */}
+        <div className="flex items-center space-x-2 flex-shrink-0">
           {/* 보호구 검사 시작 */}
           <Button
               onClick={handlePpeCheck}
@@ -258,25 +261,26 @@ export function WorkerMode({ onBack }: WorkerModeProps) {
 
         <Header />
 
-        {/* 2. 메인 컨텐츠 영역: flex-grow + justify-center로 남은 공간 중앙에 배치 */}
-        <main className="flex-grow flex flex-col items-center justify-center p-4 md:p-8 overflow-hidden">
-          {/* 카드 영역: 유연하게 늘어나되, max-w-lg로 너비 제한 */}
-          <Card className="w-full max-w-lg bg-slate-900 border-slate-800 shadow-2xl shadow-cyan-500/10 flex flex-col flex-grow">
+        {/* 2. 메인 컨텐츠 영역: flex-grow로 남은 공간 모두 차지, 중앙 정렬 */}
+        {/* p-2, sm:p-4, md:p-6으로 패딩을 줄여 웹캠 크기를 확보 */}
+        <main className="flex-grow flex flex-col items-center justify-center p-2 sm:p-4 md:p-6 overflow-hidden">
+          {/* 카드 영역: max-w-xl로 너비를 제한하고, flex-grow와 min-h-0을 적용 (스크롤 방지 핵심!) */}
+          <Card className="w-full max-w-xl bg-slate-900 border-slate-800 shadow-2xl shadow-cyan-500/10 flex flex-col flex-grow min-h-0">
 
-            <CardHeader className="text-center pb-4 flex-shrink-0">
+            {/* flex-shrink-0: 헤더와 설명 텍스트 높이 고정 */}
+            <CardHeader className="text-center pb-2 flex-shrink-0">
               <CardTitle className="text-2xl font-bold text-white">
                 웹캠으로 얼굴 인식
               </CardTitle>
-              <CardDescription className="text-gray-400 pt-2 text-sm">
+              <CardDescription className="text-gray-400 pt-1 text-sm">
                 본인 확인이 완료되면 상단 헤더의 버튼이 활성화됩니다.
               </CardDescription>
             </CardHeader>
 
-            {/* 카드 내용 (웹캠): flex-grow와 min-h-0을 사용하여 남은 공간을 모두 차지 (스크롤 방지 핵심!) */}
-            <CardContent className="flex-grow flex flex-col justify-center items-center px-4 pb-4 sm:px-6 sm:pb-6 min-h-0">
+            {/* 카드 내용 (웹캠): flex-grow와 min-h-0을 사용하여 남은 공간을 모두 차지 */}
+            <CardContent className="flex-grow flex flex-col justify-center items-center px-2 pb-4 sm:px-4 sm:pb-6 min-h-0">
 
               {/* 웹캠 UI 컨테이너: h-full과 w-full을 사용하여 CardContent에 맞게 늘어남 */}
-              {/* aspect-ratio를 제거하고 h-full w-full을 사용하여 남은 공간을 최대한 차지하도록 합니다. */}
               <div className="relative w-full h-full bg-slate-950 rounded-lg overflow-hidden border border-slate-700 shadow-inner flex-grow min-h-0">
                 <video
                     ref={videoRef}
