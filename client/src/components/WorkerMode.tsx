@@ -193,8 +193,8 @@ export function WorkerMode({ onBack }: WorkerModeProps) {
 
   // 헤더 컴포넌트
   const Header = () => (
-      // justify-between: 왼쪽/중앙/오른쪽 요소를 분리 배치
-      <header className="flex-shrink-0 flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950">
+      // relative 추가: h1의 absolute 기준점 제공
+      <header className="flex-shrink-0 flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950 relative">
 
         {/* 1. 왼쪽 영역 (모드 선택 버튼) */}
         <div className="flex-shrink-0">
@@ -208,8 +208,8 @@ export function WorkerMode({ onBack }: WorkerModeProps) {
           </Button>
         </div>
 
-        {/* 2. 중앙 영역 (본인확인 단계 텍스트): Flexbox에 통합 */}
-        <h1 className="text-lg font-semibold text-white text-center flex-grow">
+        {/* 2. 중앙 영역 (단계 텍스트): absolute로 헤더 전체 중앙에 배치 */}
+        <h1 className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 text-lg font-semibold text-white whitespace-nowrap">
           {step === 1 ? '얼굴 인식' : '보호구 검사'} ({step}/2 단계)
         </h1>
 
@@ -260,22 +260,19 @@ export function WorkerMode({ onBack }: WorkerModeProps) {
 
         <Header />
 
-        {/* 2. 메인 컨텐츠 영역: flex-grow로 남은 공간 모두 차지, 중앙 정렬 */}
-        {/* p-2로 패딩을 최소화 */}
-        <main className="flex-grow flex flex-col items-center justify-center p-2 overflow-hidden">
-          {/* 카드 영역: max-w-md로 너비를 더 줄이고, flex-grow와 min-h-0을 적용 (스크롤 방지 핵심!) */}
-          <Card className="w-full max-w-md bg-slate-900 border-slate-800 shadow-2xl shadow-cyan-500/10 flex flex-col flex-grow min-h-0">
+        {/* 2. 메인 컨텐츠 영역: 웹캠이 헤더를 제외한 모든 공간을 채우도록 p-0으로 설정 */}
+        {/* p-0으로 패딩을 제거 */}
+        <main className="flex-grow flex flex-col items-center justify-center p-0 overflow-hidden">
+          {/* 카드 영역: max-w-none으로 너비 제한 해제. 웹캠이 화면을 가득 채우도록 설정 */}
+          <Card className="w-full max-w-none bg-slate-900 border-slate-800 shadow-2xl shadow-cyan-500/10 flex flex-col flex-grow min-h-0">
 
-            {/* flex-shrink-0: 타이틀 높이 고정 */}
-            <CardHeader className="text-center pb-2 flex-shrink-0">
-              {/* CardTitle 제거 요청 반영: CardTitle과 CardDescription 모두 제거 */}
-            </CardHeader>
+            {/* CardHeader 제거: 타이틀 텍스트 제거 요청 반영 */}
 
             {/* 카드 내용 (웹캠): flex-grow와 min-h-0을 사용하여 남은 공간을 모두 차지 */}
-            {/* px-2 pb-2로 패딩을 최소화 */}
-            <CardContent className="flex-grow flex flex-col justify-center items-center px-2 pb-2 min-h-0">
+            {/* p-0으로 패딩을 제거하여 웹캠이 화면을 가득 채우도록 합니다. */}
+            <CardContent className="flex-grow flex flex-col justify-center items-center p-0 min-h-0">
 
-              {/* 웹캠 UI 컨테이너: h-full과 w-full을 사용하여 CardContent에 맞게 늘어남 */}
+              {/* 웹캠 UI 컨테이너: h-full과 w-full로 컨테이너를 가득 채움 */}
               <div className="relative w-full h-full bg-slate-950 rounded-lg overflow-hidden border border-slate-700 shadow-inner flex-grow min-h-0">
                 <video
                     ref={videoRef}
