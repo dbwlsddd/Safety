@@ -48,14 +48,14 @@ export function ModeSelection({ onSelectMode }: ModeSelectionProps) {
           {/* 헤더 */}
           <div className="text-center mb-12 lg:mb-20">
             {/* 로고/아이콘 */}
-            <div className="inline-flex items-center justify-center mb-6 lg:mb-8">
+            {/*<div className="inline-flex items-center justify-center mb-6 lg:mb-8">
               <div className="relative">
                 <div className="absolute inset-0 bg-blue-500 blur-xl opacity-50 animate-pulse"></div>
                 <div className="relative w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-2xl flex items-center justify-center shadow-2xl shadow-blue-500/50 rotate-6 hover:rotate-0 transition-transform duration-500">
                   <Zap className="w-8 h-8 lg:w-10 lg:h-10 text-white" strokeWidth={2.5} />
                 </div>
               </div>
-            </div>
+            </div>*/}
 
             {/* 타이틀 */}
             <h1 className="text-4xl sm:text-5xl lg:text-7xl mb-4 lg:mb-6 tracking-tight" style={{ fontWeight: 800 }}>
