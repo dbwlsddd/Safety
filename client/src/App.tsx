@@ -172,7 +172,7 @@ export default function App() {
   };
 
   return (
-    <div className="size-full safe-area-padding-top overflow-auto">
+    <div className="size-full safe-area-padding-top">
       {currentScreen === 'mode-selection' && (
         <ModeSelection onSelectMode={handleSelectMode} />
       )}
