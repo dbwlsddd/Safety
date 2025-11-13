@@ -5,7 +5,7 @@ import { WorkerMode } from './components/WorkerMode';
 import { InspectionScreen } from './components/InspectionScreen';
 import { Worker, AccessLogEntry, SystemConfig } from './types';
 
-type Screen = 'mode-selection' | 'admin' | 'worker' | 'inspection';
+export type Screen = 'mode-selection' | 'admin' | 'worker' | 'inspection';
 
 // 초기 더미 데이터
 const initialWorkers: Worker[] = [

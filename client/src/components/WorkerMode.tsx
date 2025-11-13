@@ -1,271 +1,194 @@
-import { useState } from 'react';
+// --- 임포트 구문 (규칙에 맞게 수정) ---
+
+import { useState, useRef, useEffect } from 'react';
+// 2. 상대 경로: ../types.ts
 import { Worker } from '../types';
-import { Camera, LogIn, LogOut, Search, ArrowLeft, Check } from 'lucide-react';
-import { Button } from './ui/button';
+import { Camera, LogIn, LogOut, ChevronLeft, Loader2 } from 'lucide-react';
+
+// 1. 별칭 경로: @/components/ui/button.tsx
+import { Button } from '@/components/ui/button';
+// 2. 상대 경로: ./Chatbot.tsx
 import { Chatbot } from './Chatbot';
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+// 1. 별칭 경로: @/components/ui/popover.tsx
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+// 1. 별칭 경로: @/components/ui/input.tsx
 import { Input } from './ui/input';
+// 1. 별칭 경로: @/components/ui/card.tsx
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+
+// 2. 상대 경로: ../App.tsx
+import type { Screen } from '../App';
+
+// --- (여기부터는 기존 코드와 동일) ---
+
+// Mock Worker (시뮬레이션용)
+const SIMULATED_WORKER = { id: "1", name: "홍길동 (A팀)" };
 
 interface WorkerModeProps {
-  workers: Worker[];
-  inspectionPassed: boolean;
-  onStartInspection: (workerId: string) => void;
-  onCheckIn: (workerId: string) => void;
-  onCheckOut: (workerId: string) => void;
-  onBack: () => void;
+  onNavigate: (screen: Screen) => void;
+  // TODO: App.tsx에서 '검사 통과 여부'와 '인식된 작업자' 상태를 받아와야 함
+  // isPpeChecked: boolean;
+  // setRecognizedWorker: (worker: {id: string, name: string} | null) => void;
 }
 
-export function WorkerMode({
-  workers,
-  inspectionPassed,
-  onStartInspection,
-  onCheckIn,
-  onCheckOut,
-  onBack,
-}: WorkerModeProps) {
-  const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null);
-  const [open, setOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+export function WorkerMode({ onNavigate }: WorkerModeProps) {
+  // 얼굴 인식 상태
+  const [recognizedWorker, setRecognizedWorker] = useState<{ id: string, name: string } | null>(null);
+  const [isRecognizing, setIsRecognizing] = useState(true); // 현재 인식 중인지
+  const [webcamError, setWebcamError] = useState<string | null>(null);
 
-  const handleStartInspection = () => {
-    if (selectedWorker) {
-      onStartInspection(selectedWorker.id);
-    }
-  };
+  // 보호구 검사 통과 여부 (임시)
+  const isPpeChecked_TEMP = false; // TODO: 이 상태는 App.tsx의 props에서 받아와야 함
 
-  const handleCheckIn = () => {
-    if (selectedWorker) {
-      onCheckIn(selectedWorker.id);
-    }
-  };
+  const videoRef = useRef<HTMLVideoElement>(null);
 
-  const handleCheckOut = () => {
-    if (selectedWorker) {
-      onCheckOut(selectedWorker.id);
-    }
-  };
+  // 1. 컴포넌트 마운트 시 웹캠 켜기
+  useEffect(() => {
+    let stream: MediaStream;
 
-  // 검색 필터링
-  const filteredWorkers = workers.filter((worker) => {
-    const query = searchQuery.toLowerCase();
-    return (
-      worker.name.toLowerCase().includes(query) ||
-      worker.employeeNumber.toLowerCase().includes(query) ||
-      worker.team.toLowerCase().includes(query)
-    );
-  });
+    const startWebcam = async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user' }, // 전면 카메라
+          audio: false
+        });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch (err) {
+        console.error("웹캠 접근 오류:", err);
+        setWebcamError("웹캠을 켤 수 없습니다. 카메라 권한을 확인해주세요.");
+        setIsRecognizing(false);
+      }
+    };
 
-  const handleSelectWorker = (worker: Worker) => {
-    setSelectedWorker(worker);
-    setOpen(false);
-    setSearchQuery('');
+    startWebcam();
+
+    // 2. (임시) 4초 후 얼굴 인식 시뮬레이션
+    // TODO: 백엔드 API가 준비되면 이 부분을 API 호출 로직(setInterval)으로 교체
+    const simulationTimer = setTimeout(() => {
+      if (!webcamError) { // 웹캠이 켜져 있을 때만
+        setRecognizedWorker(SIMULATED_WORKER);
+        setIsRecognizing(false);
+      }
+    }, 4000); // 4초 후 인식 성공 (시뮬레이션)
+
+    // 3. 컴포넌트 언마운트 시 웹캠 끄기 (리소스 정리)
+    return () => {
+      clearTimeout(simulationTimer);
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [webcamError]); // webcamError가 바뀔 때를 제외하고는 한 번만 실행
+
+  // '보호구 검사 시작' 버튼 클릭 시
+  const handlePpeCheck = () => {
+    // 인식된 작업자 정보를 가지고 검사 화면으로 이동
+    // TODO: recognizedWorker 정보를 onNavigate를 통해 App.tsx로 전달해야 함
+    onNavigate("inspection");
   };
 
   return (
-    <div className="size-full flex flex-col bg-black">
-      {/* 헤더 */}
-      <header className="bg-slate-950 border-b border-slate-800 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl flex items-center justify-center shadow-lg shadow-cyan-500/30">
-              <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-            </div>
-            <div>
-              <h3 className="text-white" style={{ fontWeight: 700 }}>스마트 안전 출입 시스템</h3>
-              <p className="text-gray-400 text-sm font-medium">작업자 모드</p>
-            </div>
-          </div>
-          <Button
-            onClick={onBack}
-            variant="outline"
-            className="bg-slate-900 border-slate-800 text-white hover:bg-slate-800 rounded-xl font-semibold"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            메인 화면
-          </Button>
-        </div>
-      </header>
+      <div className="flex flex-col justify-center items-center min-h-screen p-4 md:p-8">
+        <Button
+            variant="ghost"
+            className="absolute top-6 left-6 text-gray-400 hover:text-white"
+            onClick={() => onNavigate("modeSelection")}
+        >
+          <ChevronLeft className="w-6 h-6 mr-1" />
+          모드 선택
+        </Button>
 
-      {/* 메인 콘텐츠 */}
-      <div className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8">
-        <div className="w-full max-w-2xl">
-          {/* 안내 문구 */}
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 border border-slate-800 rounded-full mb-6">
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-              <span className="text-gray-300 text-sm font-medium">안전 출입 절차</span>
-            </div>
-            <h1 className="text-5xl text-white mb-4" style={{ fontWeight: 700 }}>산업 현장 출입 시스템</h1>
-            <p className="text-gray-400 text-lg font-medium">
-              본인 확인 및 보호구 검사를 진행해주세요
-            </p>
-          </div>
+        <Card className="w-full max-w-lg bg-gray-800 border-gray-700 shadow-xl">
+          <CardHeader className="text-center">
+            <CardTitle className="text-3xl font-bold text-white">
+              본인 확인 (1/2 단계)
+            </CardTitle>
+            <CardDescription className="text-lg text-gray-400 pt-2">
+              웹캠에 얼굴을 인식시켜 본인 확인을 완료하세요.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6 p-8">
 
-          {/* 작업자 선택 */}
-          <div className="mb-8">
-            <label className="text-white mb-3 block font-semibold">작업자 선택</label>
-            <Popover open={open} onOpenChange={setOpen} modal={false}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={open}
-                  className="w-full justify-between h-14 bg-slate-900 border-slate-800 text-white hover:bg-slate-800 hover:text-white rounded-xl font-medium"
-                >
-                  {selectedWorker ? (
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full flex items-center justify-center text-white text-sm">
-                        {selectedWorker.name.charAt(0)}
-                      </div>
-                      <div className="text-left">
-                        <div>{selectedWorker.name}</div>
-                        <div className="text-xs text-gray-400">
-                          {selectedWorker.employeeNumber} · {selectedWorker.team}
-                        </div>
-                      </div>
-                    </div>
+            {/* 얼굴 인식 웹캠 UI (기존 Select 대체) */}
+            <div className="relative w-full aspect-[4/3] bg-gray-900 rounded-lg overflow-hidden border border-gray-700">
+              <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover transform -scale-x-100" // 거울 모드
+              />
+
+              {/* 얼굴 가이드라인 및 상태 오버레이 */}
+              <div className="absolute inset-0 flex flex-col justify-center items-center p-4">
+                {/* 타원형 가이드라인 */}
+                <div
+                    className={`w-3/4 h-3/4 border-4 rounded-[50%] transition-colors duration-500 
+                ${isRecognizing ? 'border-dashed border-yellow-500' : 'border-solid border-green-500'}`}
+                ></div>
+
+                {/* 상태 메시지 */}
+                <div className="absolute bottom-4 bg-black bg-opacity-50 px-4 py-2 rounded-lg text-white text-lg font-medium">
+                  {webcamError ? (
+                      <span className="text-red-500">{webcamError}</span>
+                  ) : isRecognizing ? (
+                      <span className="flex items-center text-yellow-400">
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    얼굴 스캔 중...
+                  </span>
                   ) : (
-                    <span className="text-gray-400">작업자 이름을 검색하거나 선택하세요</span>
+                      <span className="text-green-400">
+                    ✅ {recognizedWorker?.name} 님, 확인되었습니다.
+                  </span>
                   )}
-                  <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent 
-                className="w-full p-0 bg-slate-900 border-slate-800 shadow-2xl" 
-                style={{ width: 'var(--radix-popover-trigger-width)' }} 
-                align="start"
-                onOpenAutoFocus={(e) => {
-                  e.preventDefault();
-                  const input = e.currentTarget.querySelector('input');
-                  if (input) {
-                    setTimeout(() => input.focus(), 0);
-                  }
-                }}
-              >
-                <div className="flex flex-col">
-                  {/* 검색 입력 */}
-                  <div className="p-3 border-b border-slate-800">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                      <Input
-                        placeholder="작업자 검색..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-9 bg-slate-800 border-slate-700 text-white placeholder:text-gray-400 focus:border-blue-500 focus:ring-blue-500/20"
-                        autoComplete="off"
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* 작업자 목록 */}
-                  <div className="max-h-64 overflow-auto p-2">
-                    {filteredWorkers.length === 0 ? (
-                      <div className="text-gray-400 py-6 text-center text-sm">
-                        검색 결과가 없습니다.
-                      </div>
-                    ) : (
-                      filteredWorkers.map((worker) => (
-                        <button
-                          key={worker.id}
-                          onClick={() => handleSelectWorker(worker)}
-                          className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors flex items-center gap-3"
-                        >
-                          <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
-                            {worker.name.charAt(0)}
-                          </div>
-                          <div className="flex-1">
-                            <div className="text-white font-semibold">{worker.name}</div>
-                            <div className="text-xs text-gray-400 font-medium">
-                              {worker.employeeNumber} · {worker.team}
-                            </div>
-                          </div>
-                          {selectedWorker?.id === worker.id && (
-                            <Check className="w-4 h-4 text-blue-500" />
-                          )}
-                        </button>
-                      ))
-                    )}
-                  </div>
                 </div>
-              </PopoverContent>
-            </Popover>
-          </div>
+              </div>
+            </div>
 
-          {/* 액션 버튼들 */}
-          <div className="space-y-4">
-            {/* 보호구 착용 검사 시작 버튼 */}
+            {/* v6 기획안: 핵심 액션 버튼 (검사 시작) */}
             <Button
-              onClick={handleStartInspection}
-              disabled={!selectedWorker}
-              className={`w-full h-16 sm:h-20 text-base sm:text-lg rounded-2xl ${
-                selectedWorker
-                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-2xl shadow-blue-500/30 font-bold'
-                  : 'bg-slate-900 text-gray-500 cursor-not-allowed border border-slate-800'
-              }`}
+                onClick={handlePpeCheck}
+                disabled={!recognizedWorker} // 얼굴 인식이 완료되어야 활성화
+                className="w-full text-lg py-7 bg-blue-600 hover:bg-blue-500 text-white font-bold"
+                size="lg"
             >
-              <Camera className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
-              보호구 착용 검사 시작
+              <Camera className="w-5 h-5 mr-2" />
+              보호구 검사 시작 (2단계)
             </Button>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* 출입 기록 버튼 */}
+            {/* 출입 및 퇴근 버튼 */}
+            <div className="grid grid-cols-2 gap-4 pt-4">
               <Button
-                onClick={handleCheckIn}
-                disabled={!selectedWorker || !inspectionPassed}
-                className={`h-14 sm:h-16 rounded-2xl text-sm sm:text-base ${
-                  selectedWorker && inspectionPassed
-                    ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-xl shadow-green-500/30 font-bold'
-                    : 'bg-slate-900 text-gray-500 cursor-not-allowed border border-slate-800'
-                }`}
+                  disabled={!isPpeChecked_TEMP} // 2단계 검사 통과 시 활성화
+                  className="w-full text-md py-6 bg-gray-600 hover:bg-gray-500"
+                  size="lg"
+                  variant="secondary"
               >
-                <LogIn className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+                <LogIn className="w-5 h-5 mr-2" />
                 출입 기록
               </Button>
 
-              {/* 퇴근 기록 버튼 */}
               <Button
-                onClick={handleCheckOut}
-                disabled={!selectedWorker}
-                className={`h-14 sm:h-16 rounded-2xl text-sm sm:text-base ${
-                  selectedWorker
-                    ? 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-xl shadow-orange-500/30 font-bold'
-                    : 'bg-slate-900 text-gray-500 cursor-not-allowed border border-slate-800'
-                }`}
+                  className="w-full text-md py-6 border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white"
+                  size="lg"
+                  variant="outline"
               >
-                <LogOut className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+                <LogOut className="w-5 h-5 mr-2" />
                 퇴근 기록
               </Button>
             </div>
-          </div>
 
-          {/* 상태 안내 */}
-          {selectedWorker && !inspectionPassed && (
-            <div className="mt-6 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-2xl">
-              <p className="text-yellow-400 text-sm text-center font-semibold">
-                ⚠️ 출입하려면 먼저 보호구 착용 검사를 통과해야 합니다
-              </p>
-            </div>
-          )}
-
-          {selectedWorker && inspectionPassed && (
-            <div className="mt-6 p-4 bg-green-500/10 border border-green-500/30 rounded-2xl">
-              <p className="text-green-400 text-sm text-center font-semibold">
-                ✓ 검사 통과 완료 - 출입이 가능합니다
-              </p>
-            </div>
-          )}
-        </div>
+          </CardContent>
+        </Card>
       </div>
-
-      {/* 챗봇 */}
-      <Chatbot />
-
-      {/* 푸터 */}
-      <footer className="bg-slate-950 border-t border-slate-800 px-6 py-3">
-        <div className="text-center text-gray-500 text-sm font-medium">
-          © 2024 endnune safety systems. all rights reserved.
-        </div>
-      </footer>
-    </div>
   );
 }
+
