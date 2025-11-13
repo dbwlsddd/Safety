@@ -205,6 +205,10 @@ body {
   overflow: hidden;
 }
 
+.safe-area-padding-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
 #root {
   height: 100%;
   width: 100%;
