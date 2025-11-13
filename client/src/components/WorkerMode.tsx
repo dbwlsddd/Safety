@@ -260,28 +260,34 @@ export function WorkerMode({ onBack }: WorkerModeProps) {
 
         <Header />
 
-        {/* 2. 메인 컨텐츠 영역: 웹캠이 헤더를 제외한 모든 공간을 채우도록 p-0으로 설정 */}
-        {/* p-0으로 패딩을 제거 */}
+        {/* 2. 메인 컨텐츠 영역: p-0으로 패딩을 제거하고 justify-center로 중앙 정렬 */}
         <main className="flex-grow flex flex-col items-center justify-center p-0 overflow-hidden">
+
           {/* 카드 영역: max-w-none으로 너비 제한 해제. 웹캠이 화면을 가득 채우도록 설정 */}
           <Card className="w-full max-w-none bg-slate-900 border-slate-800 shadow-2xl shadow-cyan-500/10 flex flex-col flex-grow min-h-0">
 
-            {/* CardHeader 제거: 타이틀 텍스트 제거 요청 반영 */}
+            {/* CardHeader는 p-0으로 강제하여 수직 공간을 최소화 */}
+            <CardHeader className="text-center p-0 flex-shrink-0">
+              {/* CardTitle과 CardDescription 제거 */}
+            </CardHeader>
 
-            {/* 카드 내용 (웹캠): flex-grow와 min-h-0을 사용하여 남은 공간을 모두 차지 */}
-            {/* p-0으로 패딩을 제거하여 웹캠이 화면을 가득 채우도록 합니다. */}
+            {/* 카드 내용 (웹캠): p-0으로 패딩을 제거하고 flex-grow로 남은 공간 모두 차지 */}
             <CardContent className="flex-grow flex flex-col justify-center items-center p-0 min-h-0">
 
               {/* 웹캠 UI 컨테이너: h-full과 w-full로 컨테이너를 가득 채움 */}
+              {/* min-w-0 / min-h-0을 적용하여 Flexbox가 크기를 유연하게 제어하도록 함 */}
               <div className="relative w-full h-full bg-slate-950 rounded-lg overflow-hidden border border-slate-700 shadow-inner flex-grow min-h-0">
                 <video
                     ref={videoRef}
                     autoPlay
                     playsInline
                     muted
-                    // w-full h-full로 컨테이너를 가득 채우고, object-cover로 비율을 유지
-                    className="w-full h-full object-cover transform -scale-x-100"
+                    // object-contain: 비디오 전체가 잘리지 않고 보이도록 비율 유지. 대신 빈 공간이 생김
+                    // max-h-[85vh]: 비디오 컨테이너의 최대 높이를 화면 높이의 85%로 제한하여 잘림을 방지
+                    className="w-full h-full object-contain transform -scale-x-100 max-h-full"
                 />
+
+                {/*  */}
 
                 {/* 얼굴 가이드라인 및 상태 오버레이 */}
                 <div className="absolute inset-0 flex flex-col justify-center items-center p-4">
