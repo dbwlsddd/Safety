@@ -1,19 +1,8 @@
-// --- 임포트 구문 (규칙에 맞게 수정) ---
-
 import { useState, useRef, useEffect } from 'react';
-// 2. 상대 경로: ../types.ts
-import { Worker } from '../types';
 import { Camera, LogIn, LogOut, ChevronLeft, Loader2 } from 'lucide-react';
 
-// 1. 별칭 경로: @/components/ui/button.tsx
+// --- 사용되는 컴포넌트만 남김 ---
 import { Button } from '@/components/ui/button';
-// 2. 상대 경로: ./Chatbot.tsx
-import { Chatbot } from './Chatbot';
-// 1. 별칭 경로: @/components/ui/popover.tsx
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-// 1. 별칭 경로: @/components/ui/input.tsx
-import { Input } from './ui/input';
-// 1. 별칭 경로: @/components/ui/card.tsx
 import {
   Card,
   CardContent,
@@ -21,11 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-
-// 2. 상대 경로: ../App.tsx
 import type { Screen } from '../App';
-
-// --- (여기부터는 기존 코드와 동일) ---
 
 // Mock Worker (시뮬레이션용)
 const SIMULATED_WORKER = { id: "1", name: "홍길동 (A팀)" };
@@ -86,7 +71,16 @@ export function WorkerMode({ onNavigate }: WorkerModeProps) {
         stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [webcamError]); // webcamError가 바뀔 때를 제외하고는 한 번만 실행
+
+    // ==================================================================
+    // [!!!!!!] 가장 중요한 수정 사항 [!!!!!!]
+    //
+    // [webcamError] -> [] 로 변경.
+    // webCamError 상태가 변경될 때마다 이 useEffect가 다시 실행되면
+    // (특히 권한 거부 시) 무한 루프에 빠져 브라우저가 멈춥니다.
+    // 이 훅은 컴포넌트가 처음 마운트될 때 '딱 한 번만' 실행되어야 합니다.
+    // ==================================================================
+  }, []); // <--- 이 부분을 빈 배열로 수정했습니다!
 
   // '보호구 검사 시작' 버튼 클릭 시
   const handlePpeCheck = () => {
@@ -100,7 +94,7 @@ export function WorkerMode({ onNavigate }: WorkerModeProps) {
         <Button
             variant="ghost"
             className="absolute top-6 left-6 text-gray-400 hover:text-white"
-            onClick={() => onNavigate("modeSelection")}
+            onClick={() => onNavigate("mode-selection")}
         >
           <ChevronLeft className="w-6 h-6 mr-1" />
           모드 선택
@@ -191,4 +185,3 @@ export function WorkerMode({ onNavigate }: WorkerModeProps) {
       </div>
   );
 }
-
