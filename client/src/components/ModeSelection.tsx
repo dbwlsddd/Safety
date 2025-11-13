@@ -60,12 +60,12 @@ export function ModeSelection({ onSelectMode }: ModeSelectionProps) {
             {/* 타이틀 */}
             <h1 className="text-4xl sm:text-5xl lg:text-7xl mb-4 lg:mb-6 tracking-tight" style={{ fontWeight: 800 }}>
               <span className="bg-gradient-to-r from-white via-blue-100 to-white bg-clip-text text-transparent">
-                스마트 안전
+                Safety
               </span>
-              <br />
+              {/*<br />
               <span className="bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-400 bg-clip-text text-transparent">
                 출입 시스템
-              </span>
+              </span>*/}
             </h1>
             
             <div className="flex items-center justify-center gap-2 lg:gap-3 mb-4 lg:mb-6">
