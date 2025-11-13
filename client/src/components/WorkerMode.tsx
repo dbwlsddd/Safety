@@ -208,9 +208,9 @@ export function WorkerMode({ onBack }: WorkerModeProps) {
           </Button>
         </div>
 
-        {/* 2. 중앙 영역 (본인확인 단계 텍스트): flex-grow를 사용하여 남은 공간을 확보하고 텍스트를 중앙 정렬 */}
+        {/* 2. 중앙 영역 (본인확인 단계 텍스트): Flexbox에 통합 */}
         <h1 className="text-lg font-semibold text-white text-center flex-grow">
-          본인확인 ({step}/2 단계)
+          {step === 1 ? '얼굴 인식' : '보호구 검사'} ({step}/2 단계)
         </h1>
 
         {/* 3. 오른쪽 영역 (모든 액션 버튼 통합) */}
@@ -261,17 +261,14 @@ export function WorkerMode({ onBack }: WorkerModeProps) {
         <Header />
 
         {/* 2. 메인 컨텐츠 영역: flex-grow로 남은 공간 모두 차지, 중앙 정렬 */}
-        {/* p-2로 패딩을 최소화하여 웹캠 크기를 확보 */}
+        {/* p-2로 패딩을 최소화 */}
         <main className="flex-grow flex flex-col items-center justify-center p-2 overflow-hidden">
           {/* 카드 영역: max-w-md로 너비를 더 줄이고, flex-grow와 min-h-0을 적용 (스크롤 방지 핵심!) */}
           <Card className="w-full max-w-md bg-slate-900 border-slate-800 shadow-2xl shadow-cyan-500/10 flex flex-col flex-grow min-h-0">
 
             {/* flex-shrink-0: 타이틀 높이 고정 */}
             <CardHeader className="text-center pb-2 flex-shrink-0">
-              <CardTitle className="text-2xl font-bold text-white">
-                웹캠으로 얼굴 인식
-              </CardTitle>
-              {/* CardDescription 제거: 텍스트 제거 요청 반영 */}
+              {/* CardTitle 제거 요청 반영: CardTitle과 CardDescription 모두 제거 */}
             </CardHeader>
 
             {/* 카드 내용 (웹캠): flex-grow와 min-h-0을 사용하여 남은 공간을 모두 차지 */}
