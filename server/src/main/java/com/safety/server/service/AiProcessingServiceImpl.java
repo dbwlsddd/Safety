@@ -1,43 +1,82 @@
 package com.safety.server.service;
 
 import com.safety.server.dto.WorkerRecognitionResult;
-import com.safety.server.service.AiProcessingService;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
-// src/main/java/com/safety/server/service/AiProcessingServiceImpl.java (개념 코드)
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.Map;
+
 @Service
 public class AiProcessingServiceImpl implements AiProcessingService {
-    // ... (WebClient/RestTemplate 초기화)
+
+    // application.properties에서 AI 서버 주소를 읽어옵니다. (설정 필요)
+    @Value("${ai.server.url:http://localhost:8000}")
+    private String aiServerBaseUrl;
+
+    private final RestTemplate restTemplate;
+
+    // 생성자에서 RestTemplate을 초기화합니다.
+    public AiProcessingServiceImpl() {
+        this.restTemplate = new RestTemplate();
+    }
 
     @Override
     public WorkerRecognitionResult processFrameForRecognition(byte[] imageBytes) {
+
         // 1. byte[] -> Base64 String 변환
-        String base64Image = java.util.Base64.getEncoder().encodeToString(imageBytes);
+        String base64Image = Base64.getEncoder().encodeToString(imageBytes);
 
-        // 2. AI 서버가 기대하는 JSON 형식으로 요청 바디 생성
-        //    (main.py의 ImageInput 형식: {"image_base64": "..."})
-        String requestBody = String.format("{\"image_base64\": \"%s\"}", base64Image);
+        // 2. 요청 본문(Request Body) 생성 (Python의 ImageInput 모델과 일치)
+        Map<String, String> requestBody = new HashMap<>();
+        requestBody.put("image_base64", base64Image);
 
-        // 3. HTTP 요청 및 응답 처리 (WebClient 사용 예)
-        // try {
-        //     AiServerResponse aiResponse = webClient.post()
-        //         .uri("http://{AI_SERVER_IP}:8000/detect_face")
-        //         .bodyValue(requestBody)
-        //         .retrieve()
-        //         .bodyToMono(AiServerResponse.class)
-        //         .block();
+        // 3. HTTP 헤더 설정
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
 
-        //     // 4. AI 응답을 WorkerRecognitionResult로 변환하여 반환
-        //     // ...
-        // } catch (Exception e) {
-        //     throw new RuntimeException("AI 서버 통신 실패", e);
-        // }
+        // 4. HttpEntity 생성 (헤더 + 본문)
+        HttpEntity<Map<String, String>> entity = new HttpEntity<>(requestBody, headers);
 
-        // **(임시 Mock 응답)**
-        if (Math.random() > 0.5) { // 50% 확률로 성공
-            return new WorkerRecognitionResult(true, "W001", "홍길동");
-        } else {
-            return new WorkerRecognitionResult(false, null, null);
+        // 5. AI 서버 엔드포인트 호출
+        String url = aiServerBaseUrl + "/recognize_worker";
+
+        try {
+            // 응답은 Python에서 보낸 JSON 문자열을 Map으로 받습니다.
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = restTemplate.postForObject(url, entity, Map.class);
+
+            if (response == null || !response.containsKey("status")) {
+                throw new RuntimeException("AI 서버로부터 유효하지 않은 응답을 받았습니다.");
+            }
+
+            String status = (String) response.get("status");
+
+            if ("SUCCESS".equals(status)) {
+                // 인식 성공
+                Map<String, String> workerData = (Map<String, String>) response.get("worker");
+                return new WorkerRecognitionResult(
+                        true,
+                        workerData.get("id"),
+                        workerData.get("name")
+                );
+            } else {
+                // 인식 실패 (FAILURE 또는 ERROR)
+                String message = (String) response.getOrDefault("message", "인식 실패");
+                System.out.println("AI 서버 인식 실패: " + message);
+                return new WorkerRecognitionResult(false, null, null);
+            }
+
+        } catch (Exception e) {
+            // 통신 오류, 타임아웃 등
+            System.err.println("AI 서버 통신 중 오류 발생: " + e.getMessage());
+            // 프론트엔드에게 즉시 오류를 알릴 수 있도록 여기서 RuntimeException을 던집니다.
+            throw new RuntimeException("AI 서버와 통신 중 문제가 발생했습니다. (" + e.getMessage() + ")");
         }
     }
 }
