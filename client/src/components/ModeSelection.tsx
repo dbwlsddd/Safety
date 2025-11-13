@@ -57,6 +57,8 @@ export function ModeSelection({ onSelectMode }: ModeSelectionProps) {
               </div>
             </div>*/}
 
+            <div className={"h-16"}></div>
+
             {/* 타이틀 */}
             <h1 className="text-4xl sm:text-5xl lg:text-7xl mb-4 lg:mb-6 tracking-tight" style={{ fontWeight: 800 }}>
               <span className="bg-gradient-to-r from-white via-blue-100 to-white bg-clip-text text-transparent">
@@ -67,7 +69,7 @@ export function ModeSelection({ onSelectMode }: ModeSelectionProps) {
                 출입 시스템
               </span>*/}
             </h1>
-            
+
             <div className="flex items-center justify-center gap-2 lg:gap-3 mb-4 lg:mb-6">
               <div className="h-px w-8 lg:w-12 bg-gradient-to-r from-transparent to-blue-500"></div>
               <p className="text-gray-400 text-sm lg:text-lg font-medium tracking-wide">AI POWERED SAFETY SOLUTION</p>
@@ -88,7 +90,7 @@ export function ModeSelection({ onSelectMode }: ModeSelectionProps) {
             >
               {/* 호버 효과 */}
               <div className="absolute inset-0 bg-gradient-to-br from-blue-500/0 to-cyan-500/0 group-hover:from-blue-500/10 group-hover:to-cyan-500/10 transition-all duration-500"></div>
-              
+
               {/* 광선 효과 */}
               <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl group-hover:bg-blue-500/30 transition-all duration-500"></div>
 
@@ -130,7 +132,7 @@ export function ModeSelection({ onSelectMode }: ModeSelectionProps) {
             >
               {/* 호버 효과 */}
               <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/0 to-blue-500/0 group-hover:from-cyan-500/10 group-hover:to-blue-500/10 transition-all duration-500"></div>
-              
+
               {/* 광선 효과 */}
               <div className="absolute -top-24 -right-24 w-48 h-48 bg-cyan-500/20 rounded-full blur-3xl group-hover:bg-cyan-500/30 transition-all duration-500"></div>
 

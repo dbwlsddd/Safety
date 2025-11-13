@@ -24,9 +24,6 @@ const WEBSOCKET_URL = "ws://100.64.239.86:8080/ws/video";
 const FRAME_CAPTURE_INTERVAL_MS = 300;
 // ==================================================================
 
-// Mock Worker (시뮬레이션용) - 이제 백엔드에서 받아옵니다.
-// const SIMULATED_WORKER = { id: "1", name: "홍길동 (A팀)" };
-
 interface WorkerModeProps {
   onNavigate: (screen: Screen) => void;
   // TODO: App.tsx에서 '검사 통과 여부'와 '인식된 작업자' 상태를 받아와야 함
@@ -45,6 +42,11 @@ export function WorkerMode({ onNavigate }: WorkerModeProps) {
   const isPpeChecked_TEMP = false; // TODO: 이 상태는 App.tsx의 props에서 받아와야 함
 
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // ** 헤더 타이틀에 사용할 현재 단계 상태 (1단계: 본인 확인, 2단계: 장비 검사) **
+  // 현재 코드는 항상 1단계 본인확인만 수행하고 inspection으로 넘어가므로 step 상태는 필요 없지만,
+  // 요청사항에 "본인확인(1/2 단계)"를 반영하기 위해 상태를 임시로 사용합니다.
+  const [step, setStep] = useState(1);
 
   // ==================================================================
   // [ 2. Ref 추가 ] 웹소켓, 캔버스, 인터벌을 관리하기 위한 Ref
@@ -185,8 +187,6 @@ export function WorkerMode({ onNavigate }: WorkerModeProps) {
 
     startWebcam(); // (A)
 
-    // (시뮬레이션 타이머 삭제)
-
     // 3. 컴포넌트 언마운트 시 모든 리소스 정리
     return () => {
       console.log("WorkerMode 정리...");
@@ -213,104 +213,125 @@ export function WorkerMode({ onNavigate }: WorkerModeProps) {
     onNavigate("inspection");
   };
 
+  // 요청하신 헤더 컴포넌트
+  const Header = () => (
+      <header className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950 sticky top-0 z-10">
+        {/* 왼쪽에 [모드 선택] 버튼 */}
+        <Button
+            variant="ghost"
+            onClick={() => onNavigate("mode-selection")}
+            className="text-gray-400 hover:text-white hover:bg-slate-800/50 p-2 h-auto rounded-full text-sm"
+        >
+          <ChevronLeft className="h-5 w-5 mr-1" />
+          모드 선택
+        </Button>
+
+        {/* 가운데에 본인확인 (1/2 단계) 텍스트 */}
+        <h1 className="text-lg font-semibold text-white absolute left-1/2 transform -translate-x-1/2 whitespace-nowrap">
+          본인확인 ({step}/2 단계)
+        </h1>
+
+        {/* 레이아웃 균형을 위한 빈 공간 */}
+        <div className="w-20"></div>
+      </header>
+  );
+
   // ==================================================================
   // [ 6. UI 렌더링 ]
   // ==================================================================
   return (
-      <div className="flex flex-col justify-center items-center min-h-screen p-4 md:p-8 bg-slate-950">
-        <Button
-            variant="ghost"
-            className="absolute top-6 left-6 text-gray-400 hover:text-white hover:bg-slate-800/50"
-            onClick={() => onNavigate("mode-selection")}
-        >
-          <ChevronLeft className="w-6 h-6 mr-1" />
-          모드 선택
-        </Button>
+      // 1. 전체 레이아웃을 flex-col, h-full로 설정하여 스크롤 없이 한 화면에 맞춥니다.
+      <div className="flex flex-col h-screen bg-slate-950">
 
-        <Card className="w-full max-w-lg bg-slate-900 border-slate-800 shadow-2xl shadow-cyan-500/10">
-          <CardHeader className="text-center">
-            <CardTitle className="text-3xl font-bold text-white">
-              본인 확인 (1/2 단계)
-            </CardTitle>
-            <CardDescription className="text-lg text-gray-400 pt-2">
-              웹캠에 얼굴을 인식시켜 본인 확인을 완료하세요.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6 p-8">
+        <Header />
 
-            {/* 얼굴 인식 웹캠 UI */}
-            <div className="relative w-full aspect-[4/3] bg-slate-950 rounded-lg overflow-hidden border border-slate-700">
-              <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover transform -scale-x-100" // 거울 모드
-              />
+        {/* 2. 메인 컨텐츠 영역: flex-grow를 사용하여 헤더와 버튼 영역을 제외한 남은 공간을 모두 채웁니다.
+             justify-center는 컨텐츠를 수직 중앙 정렬합니다. */}
+        <main className="flex-grow flex flex-col items-center justify-center p-4 md:p-8 overflow-y-auto">
+          <Card className="w-full max-w-lg bg-slate-900 border-slate-800 shadow-2xl shadow-cyan-500/10 flex flex-col flex-shrink-0">
+            <CardHeader className="text-center pb-4">
+              <CardTitle className="text-2xl font-bold text-white">
+                {step === 1 ? "웹캠으로 얼굴 인식" : "보호구 검사 준비"}
+              </CardTitle>
+              <CardDescription className="text-gray-400 pt-2 text-sm">
+                {step === 1 ? "웹캠에 얼굴을 인식시켜 본인 확인을 완료하세요." : "보호구 착용 상태를 확인합니다."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 px-4 pb-4 sm:px-6 sm:pb-6">
+              {/* 얼굴 인식 웹캠 UI */}
+              <div className="relative w-full aspect-[4/3] bg-slate-950 rounded-lg overflow-hidden border border-slate-700">
+                <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover transform -scale-x-100" // 거울 모드
+                />
 
-              {/* 얼굴 가이드라인 및 상태 오버레이 */}
-              <div className="absolute inset-0 flex flex-col justify-center items-center p-4">
-                {/* 타원형 가이드라인 */}
-                <div
-                    className={`w-3/4 h-3/4 border-4 rounded-[50%] transition-colors duration-500 
-                ${isRecognizing ? 'border-dashed border-yellow-500' : 'border-solid border-green-500'}`}
-                ></div>
+                {/* 얼굴 가이드라인 및 상태 오버레이 */}
+                <div className="absolute inset-0 flex flex-col justify-center items-center p-4">
+                  {/* 타원형 가이드라인 */}
+                  <div
+                      className={`w-3/4 h-3/4 border-4 rounded-[50%] transition-colors duration-500 
+                            ${isRecognizing ? 'border-dashed border-yellow-500' : 'border-solid border-green-500'}`}
+                  ></div>
 
-                {/* 상태 메시지 */}
-                <div className="absolute bottom-4 bg-black bg-opacity-50 px-4 py-2 rounded-lg text-white text-lg font-medium">
-                  {webcamError ? (
-                      <span className="text-red-500">{webcamError}</span>
-                  ) : wsConnectionError ? ( // 웹소켓 연결 오류 메시지 추가
-                      <span className="text-red-500">{wsConnectionError}</span>
-                  ) : isRecognizing ? (
-                      <span className="flex items-center text-yellow-400">
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    얼굴 스캔 중...
-                  </span>
-                  ) : (
-                      <span className="text-green-400">
-                    ✅ {recognizedWorker?.name} 님, 확인되었습니다.
-                  </span>
-                  )}
+                  {/* 상태 메시지 */}
+                  <div className="absolute bottom-4 bg-black bg-opacity-50 px-4 py-2 rounded-lg text-white text-lg font-medium">
+                    {webcamError ? (
+                        <span className="text-red-500">{webcamError}</span>
+                    ) : wsConnectionError ? ( // 웹소켓 연결 오류 메시지 추가
+                        <span className="text-red-500">{wsConnectionError}</span>
+                    ) : isRecognizing ? (
+                        <span className="flex items-center text-yellow-400">
+                                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                                얼굴 스캔 중...
+                              </span>
+                    ) : (
+                        <span className="text-green-400">
+                                ✅ {recognizedWorker?.name} 님, 확인되었습니다.
+                              </span>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* 핵심 액션 버튼 (검사 시작) */}
-            <Button
-                onClick={handlePpeCheck}
-                disabled={!recognizedWorker} // 얼굴 인식이 완료되어야 활성화
-                className="w-full text-lg py-7 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white font-bold shadow-lg shadow-cyan-500/30 rounded-xl"
-                size="lg"
-            >
-              <Camera className="w-5 h-5 mr-2" />
-              보호구 검사 시작 (2단계)
-            </Button>
-
-            {/* 출입 및 퇴근 버튼 */}
-            <div className="grid grid-cols-2 gap-4 pt-4">
+              {/* 핵심 액션 버튼 (검사 시작) */}
               <Button
-                  disabled={!isPpeChecked_TEMP} // 2단계 검사 통과 시 활성화
-                  className="w-full text-md py-6 bg-slate-700 hover:bg-slate-600 text-white font-semibold shadow-md shadow-cyan-500/10 rounded-xl"
+                  onClick={handlePpeCheck}
+                  disabled={!recognizedWorker} // 얼굴 인식이 완료되어야 활성화
+                  className="w-full text-lg py-7 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white font-bold shadow-lg shadow-cyan-500/30 rounded-xl"
                   size="lg"
-                  variant="secondary"
               >
-                <LogIn className="w-5 h-5 mr-2" />
-                출입 기록
+                <Camera className="w-5 h-5 mr-2" />
+                보호구 검사 시작 (2단계)
               </Button>
 
-              <Button
-                  className="w-full text-md py-6 border-cyan-500/50 text-cyan-400 hover:bg-slate-800 hover:text-cyan-300 font-semibold rounded-xl"
-                  size="lg"
-                  variant="outline"
-              >
-                <LogOut className="w-5 h-5 mr-2" />
-                퇴근 기록
-              </Button>
-            </div>
+              {/* 출입 및 퇴근 버튼 */}
+              <div className="grid grid-cols-2 gap-4 pt-2">
+                <Button
+                    disabled={!isPpeChecked_TEMP} // 2단계 검사 통과 시 활성화
+                    className="w-full text-md py-6 bg-slate-700 hover:bg-slate-600 text-white font-semibold shadow-md shadow-cyan-500/10 rounded-xl"
+                    size="lg"
+                    variant="secondary"
+                >
+                  <LogIn className="w-5 h-5 mr-2" />
+                  출입 기록
+                </Button>
 
-          </CardContent>
-        </Card>
+                <Button
+                    className="w-full text-md py-6 border-cyan-500/50 text-cyan-400 hover:bg-slate-800 hover:text-cyan-300 font-semibold rounded-xl"
+                    size="lg"
+                    variant="outline"
+                >
+                  <LogOut className="w-5 h-5 mr-2" />
+                  퇴근 기록
+                </Button>
+              </div>
+
+            </CardContent>
+          </Card>
+        </main>
       </div>
   );
 }
