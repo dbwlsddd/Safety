@@ -214,20 +214,20 @@ export function WorkerMode({ onNavigate }: WorkerModeProps) {
   };
 
   // ==================================================================
-  // [ 6. UI 렌더링 ] (DButton, mode-selection 오타 수정 완료)
+  // [ 6. UI 렌더링 ]
   // ==================================================================
   return (
-      <div className="flex flex-col justify-center items-center min-h-screen p-4 md:p-8">
+      <div className="flex flex-col justify-center items-center min-h-screen p-4 md:p-8 bg-slate-950">
         <Button
             variant="ghost"
-            className="absolute top-6 left-6 text-gray-400 hover:text-white"
-            onClick={() => onNavigate("mode-selection")} // [오류 수정] 's' 소문자
+            className="absolute top-6 left-6 text-gray-400 hover:text-white hover:bg-slate-800/50"
+            onClick={() => onNavigate("mode-selection")}
         >
           <ChevronLeft className="w-6 h-6 mr-1" />
           모드 선택
         </Button>
 
-        <Card className="w-full max-w-lg bg-gray-800 border-gray-700 shadow-xl">
+        <Card className="w-full max-w-lg bg-slate-900 border-slate-800 shadow-2xl shadow-cyan-500/10">
           <CardHeader className="text-center">
             <CardTitle className="text-3xl font-bold text-white">
               본인 확인 (1/2 단계)
@@ -239,7 +239,7 @@ export function WorkerMode({ onNavigate }: WorkerModeProps) {
           <CardContent className="space-y-6 p-8">
 
             {/* 얼굴 인식 웹캠 UI */}
-            <div className="relative w-full aspect-[4/3] bg-gray-900 rounded-lg overflow-hidden border border-gray-700">
+            <div className="relative w-full aspect-[4/3] bg-slate-950 rounded-lg overflow-hidden border border-slate-700">
               <video
                   ref={videoRef}
                   autoPlay
@@ -276,22 +276,22 @@ export function WorkerMode({ onNavigate }: WorkerModeProps) {
               </div>
             </div>
 
-            {/* v6 기획안: 핵심 액션 버튼 (검사 시작) */}
+            {/* 핵심 액션 버튼 (검사 시작) */}
             <Button
                 onClick={handlePpeCheck}
                 disabled={!recognizedWorker} // 얼굴 인식이 완료되어야 활성화
-                className="w-full text-lg py-7 bg-blue-600 hover:bg-blue-500 text-white font-bold"
+                className="w-full text-lg py-7 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white font-bold shadow-lg shadow-cyan-500/30 rounded-xl"
                 size="lg"
             >
               <Camera className="w-5 h-5 mr-2" />
               보호구 검사 시작 (2단계)
-            </Button> {/* [오류 수정] 'B'utton */}
+            </Button>
 
             {/* 출입 및 퇴근 버튼 */}
             <div className="grid grid-cols-2 gap-4 pt-4">
               <Button
                   disabled={!isPpeChecked_TEMP} // 2단계 검사 통과 시 활성화
-                  className="w-full text-md py-6 bg-gray-600 hover:bg-gray-500"
+                  className="w-full text-md py-6 bg-slate-700 hover:bg-slate-600 text-white font-semibold shadow-md shadow-cyan-500/10 rounded-xl"
                   size="lg"
                   variant="secondary"
               >
@@ -300,7 +300,7 @@ export function WorkerMode({ onNavigate }: WorkerModeProps) {
               </Button>
 
               <Button
-                  className="w-full text-md py-6 border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white"
+                  className="w-full text-md py-6 border-cyan-500/50 text-cyan-400 hover:bg-slate-800 hover:text-cyan-300 font-semibold rounded-xl"
                   size="lg"
                   variant="outline"
               >
