@@ -4,23 +4,12 @@ import path from 'path';
 import fs from 'fs';
 
 export default defineConfig({
-  plugins: [
-    // ▼▼▼ 'styled-jsx' 플러그인 설정을 추가합니다 ▼▼▼
-    react({
-      plugins: [
-        ['@swc/plugin-styled-jsx', {
-          // 이곳에 styled-jsx 관련 세부 설정을 추가할 수 있습니다.
-        }]
-      ]
-    })
-    // ▲▲▲
-  ],
+  plugins: [react()],
   resolve: {
     extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
     alias: {
       'vaul@1.1.2': 'vaul',
       'sonner@2.0.3': 'sonner',
-      'recharts@2.15.2': 'recharts',
       'react-resizable-panels@2.1.7': 'react-resizable-panels',
       'react-hook-form@7.55.0': 'react-hook-form',
       'react-day-picker@8.10.1': 'react-day-picker',
@@ -67,10 +56,10 @@ export default defineConfig({
     port: 3000,
     open: true,
     https: {
-      // 'ENOENT' 에러 방지를 위해 path.resolve를 사용한 절대 경로로 수정
       key: fs.readFileSync(path.resolve(__dirname, 'safety.key')),
       cert: fs.readFileSync(path.resolve(__dirname, 'safety.crt'))
     },
+
     host: '0.0.0.0'
   }
 });
