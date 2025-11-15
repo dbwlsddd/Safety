@@ -14,7 +14,7 @@ import { Chatbot } from './Chatbot';
 /** * 1. 실제 스프링부트 WebSocket 엔드포인트 주소
  * (예: "ws://localhost:8080/ws/safety")
  */
-const WEBSOCKET_URL = "ws://100.64.239.86:8443/ws/video"; // ⬅️ WebSocketConfig.java와 일치시켜야 함
+const WEBSOCKET_URL = "wss://100.64.239.86:8443/ws/video"; // ⬅️ WebSocketConfig.java와 일치시켜야 함
 
 /**
  * 2. 프레임 전송 간격 (밀리초 단위)
