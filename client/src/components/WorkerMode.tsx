@@ -1,324 +1,371 @@
-import { useState, useRef, useEffect } from 'react';
-import { Camera, LogIn, LogOut, ChevronLeft, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { Worker } from '../types';
+import { LogIn, LogOut, ArrowLeft, UserCheck } from 'lucide-react';
+// 🛠️ 수정: Button의 상대 경로를 조정했습니다.
+import { Button } from './ui/button';
+// 🛠️ 수정: Chatbot의 상대 경로를 조정했습니다.
+import { Chatbot } from './Chatbot';
 
-import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import type { Screen } from '../App';
-
-// ==================================================================
-// [ 1. 설정 ] 웹소켓 주소 및 프레임 전송 간격
-// ==================================================================
-// TODO:
-// "jjserver"의 IP 주소와 Spring Boot 포트(e.g., 8080)로 변경해야 합니다.
-// 예: "ws://100.64.239.86:8080/ws/video"
-const WEBSOCKET_URL = "ws://100.64.239.86:8080/ws/video";
-
-// 10프레임/초 (30fps 기준 1/3) 와 유사하게, 300ms(0.3초)마다 프레임 전송
-const FRAME_CAPTURE_INTERVAL_MS = 300;
-// ==================================================================
-
+// NOTE: App.tsx에서 변경된 프롭을 반영합니다.
 interface WorkerModeProps {
-  onBack: () => void; // 모드 선택 화면으로 돌아가는 함수 (App.tsx에서 handleLogout 연결)
-  // TODO: App.tsx에서 '검사 통과 여부'와 '인식된 작업자' 상태를 받아와야 함
-  // isPpeChecked: boolean;
-  // setRecognizedWorker: (worker: {id: string, name: string} | null) => void;
+  workers: Worker[];
+  requiredEquipment: string[];
+  checkedInWorkerIds: Set<string>; // App.tsx에서 추가된 출입 상태 Set
+  onCheckIn: (workerId: string) => void;
+  onCheckOut: (workerId: string) => void;
+  onBack: () => void;
 }
 
-// 수정된 WorkerMode 컴포넌트
-export function WorkerMode({ onBack }: WorkerModeProps) {
-  // 상태 관리 (기존 로직 유지)
-  const [recognizedWorker, setRecognizedWorker] = useState<{ id: string, name: string } | null>(null);
-  const [isRecognizing, setIsRecognizing] = useState(true);
-  const [webcamError, setWebcamError] = useState<string | null>(null);
-  const [wsConnectionError, setWsConnectionError] = useState<string | null>(null);
-  const isPpeChecked_TEMP = false;
-  const [step, setStep] = useState(1);
+export function WorkerMode({
+                             workers,
+                             requiredEquipment,
+                             checkedInWorkerIds,
+                             onCheckIn,
+                             onCheckOut,
+                             onBack,
+                           }: WorkerModeProps) {
+  const [step, setStep] = useState<'face-recognition' | 'equipment-check'>('face-recognition');
+  const [recognizedWorker, setRecognizedWorker] = useState<Worker | null>(null);
+  const [detectedEquipment, setDetectedEquipment] = useState<{ [key: string]: boolean }>({});
+  const [isAlreadyCheckedIn, setIsAlreadyCheckedIn] = useState(false);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const webSocketRef = useRef<WebSocket | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  // 얼굴 인식 시뮬레이션 (랜덤하게 작업자 선택)
+  const handleFaceRecognition = () => {
+    // 인식 시뮬레이션
+    const randomWorker = workers[Math.floor(Math.random() * workers.length)];
+    setRecognizedWorker(randomWorker);
 
-  // 1. 컴포넌트 마운트 시 웹캠 켜기 및 웹소켓 연결 (로직 유지)
-  useEffect(() => {
-    let stream: MediaStream | undefined;
+    // AI 코드의 핵심 로직: 현재 출입 상태 확인
+    const alreadyCheckedIn = checkedInWorkerIds.has(randomWorker.id);
+    setIsAlreadyCheckedIn(alreadyCheckedIn);
 
-    // [ 3. 프레임 캡처 및 전송 함수 ]
-    const captureAndSendFrame = () => {
-      if (
-          videoRef.current &&
-          canvasRef.current &&
-          webSocketRef.current &&
-          webSocketRef.current.readyState === WebSocket.OPEN
-      ) {
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-
-        if (ctx) {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          ctx.translate(canvas.width, 0);
-          ctx.scale(-1, 1);
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
-
-          canvas.toBlob(
-              (blob) => {
-                if (blob && webSocketRef.current?.readyState === WebSocket.OPEN) {
-                  webSocketRef.current.send(blob);
-                }
-              },
-              'image/jpeg',
-              0.8
-          );
-        }
-      }
-    };
-
-    // [ 4. 웹소켓 연결 함수 ]
-    const startWebSocket = () => {
-      if (!canvasRef.current) {
-        canvasRef.current = document.createElement('canvas');
-      }
-
-      console.log(`AI 서버 연결 시도: ${WEBSOCKET_URL}`);
-      const ws = new WebSocket(WEBSOCKET_URL);
-      webSocketRef.current = ws;
-
-      ws.onopen = () => {
-        console.log("AI 서버 연결 성공.");
-        setWsConnectionError(null);
-        setIsRecognizing(true);
-        intervalRef.current = setInterval(captureAndSendFrame, FRAME_CAPTURE_INTERVAL_MS);
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-
-          if (data.status === 'SUCCESS' && data.worker) {
-            console.log("인식 성공:", data.worker.name);
-            setRecognizedWorker(data.worker);
-            setIsRecognizing(false);
-
-            if (intervalRef.current) {
-              clearInterval(intervalRef.current);
-              intervalRef.current = null;
-            }
-            ws.close();
-          }
-        } catch (err) {
-          console.error("백엔드 메시지 파싱 오류:", err);
-        }
-      };
-
-      ws.onerror = (err) => {
-        console.error("웹소켓 오류:", err);
-        setWsConnectionError("AI 서버 연결에 실패했습니다. (주소 확인)");
-        setIsRecognizing(false);
-      };
-
-      ws.onclose = () => {
-        console.log("AI 서버 연결 끊김.");
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-        }
-      };
-    };
-
-    // [ 5. 웹캠 시작 함수 (기존) ]
-    const startWebcam = async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user' },
-          audio: false
+    if (alreadyCheckedIn) {
+      // 출입 중인 경우: 퇴근 대기 모드 (step은 face-recognition 유지)
+      // 별도의 추가 액션 없이 상태만 업데이트하여 UI에 반영
+      console.log(`${randomWorker.name}님은 이미 출입 중입니다. 퇴근 대기.`);
+    } else {
+      // 출입하지 않은 경우: 보호구 검사 단계로 진행
+      setTimeout(() => {
+        setStep('equipment-check');
+        // 초기 상태는 모두 미착용 (false)
+        const initialEquipment: { [key: string]: boolean } = {};
+        requiredEquipment.forEach(eq => {
+          // 시뮬레이션: 50% 확률로 헬멧만 착용 상태로 시작
+          initialEquipment[eq] = eq === '헬멧' ? true : false;
         });
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.onloadeddata = () => {
-            startWebSocket();
-          };
-        }
-      } catch (err) {
-        console.error("웹캠 접근 오류:", err);
-        setWebcamError("웹캠을 켤 수 없습니다. 카메라 권한을 확인해주세요.");
-        setIsRecognizing(false);
-      }
-    };
-
-    startWebcam();
-
-    // 3. 컴포넌트 언마운트 시 모든 리소스 정리
-    return () => {
-      console.log("WorkerMode 정리...");
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-      if (webSocketRef.current) {
-        webSocketRef.current.close();
-      }
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-    };
-
-  }, []);
-
-  // '보호구 검사 시작' 버튼 클릭 시
-  const handlePpeCheck = () => {
-    console.log("보호구 검사 시작 (inspection 화면으로 이동 예정)");
-    // TODO: onNavigate("inspection") 로직을 여기서 실행해야 함
+        setDetectedEquipment(initialEquipment);
+      }, 1500);
+    }
   };
 
-  // '출입 기록' 버튼 클릭 시
-  const handleCheckIn = () => {
-    console.log("출입 기록");
-    // TODO: onCheckIn 로직 실행
+  // 보호구 착용 시뮬레이션 (클릭하면 착용/미착용 토글)
+  const toggleEquipment = (equipment: string) => {
+    setDetectedEquipment(prev => ({
+      ...prev,
+      [equipment]: !prev[equipment],
+    }));
   };
 
-  // '퇴근 기록' 버튼 클릭 시
-  const handleCheckOut = () => {
-    console.log("퇴근 기록");
-    // TODO: onCheckOut 로직 실행
+  // 모든 보호구 착용 확인
+  const allEquipmentDetected = requiredEquipment.every(eq => detectedEquipment[eq]);
+
+  // 출입 처리
+  const handleCheckInClick = () => {
+    if (recognizedWorker && allEquipmentDetected) {
+      onCheckIn(recognizedWorker.id);
+      setIsAlreadyCheckedIn(true);
+      // 출입 성공 후 초기화 및 face-recognition 상태로 복귀
+      setTimeout(() => {
+        handleReset();
+      }, 1000);
+    }
   };
 
-  // 헤더 컴포넌트
-  const Header = () => (
-      // relative 추가: h1의 absolute 기준점 제공
-      <header className="flex-shrink-0 flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950 relative">
+  // 퇴근 처리
+  const handleCheckOutClick = () => {
+    if (recognizedWorker) {
+      onCheckOut(recognizedWorker.id);
+      setIsAlreadyCheckedIn(false);
+      // 초기화
+      handleReset();
+    }
+  };
 
-        {/* 1. 왼쪽 영역 (모드 선택 버튼) */}
-        <div className="flex-shrink-0">
-          <Button
-              variant="ghost"
-              onClick={onBack}
-              className="text-gray-400 hover:text-white hover:bg-slate-800/50 p-2 h-auto rounded-full text-sm"
-          >
-            <ChevronLeft className="h-5 w-5 mr-1" />
-            모드 선택
-          </Button>
-        </div>
-
-        {/* 2. 중앙 영역 (단계 텍스트): absolute로 헤더 전체 중앙에 배치 */}
-        <h1 className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 text-lg font-semibold text-white whitespace-nowrap">
-          {step === 1 ? '얼굴 인식' : '보호구 검사'} ({step}/2 단계)
-        </h1>
-
-        {/* 3. 오른쪽 영역 (모든 액션 버튼 통합) */}
-        <div className="flex items-center space-x-2 flex-shrink-0">
-          {/* 보호구 검사 시작 */}
-          <Button
-              onClick={handlePpeCheck}
-              disabled={!recognizedWorker}
-              className="text-md h-10 px-4 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white font-semibold rounded-xl"
-              size="sm"
-          >
-            <Camera className="w-4 h-4 mr-1" />
-            검사 시작
-          </Button>
-
-          <Separator orientation="vertical" className="h-6 bg-slate-700" />
-
-          {/* 출입 기록 */}
-          <Button
-              onClick={handleCheckIn}
-              disabled={!isPpeChecked_TEMP}
-              className="text-md h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-xl"
-              size="sm"
-              variant="secondary"
-          >
-            <LogIn className="w-4 h-4 mr-1" />
-            출입
-          </Button>
-
-          {/* 퇴근 기록 */}
-          <Button
-              onClick={handleCheckOut}
-              className="text-md h-10 px-4 border-cyan-500/50 text-cyan-400 hover:bg-slate-800 hover:text-cyan-300 font-semibold rounded-xl"
-              size="sm"
-              variant="outline"
-          >
-            <LogOut className="w-4 h-4 mr-1" />
-            퇴근
-          </Button>
-        </div>
-      </header>
-  );
+  // 초기화 함수
+  const handleReset = () => {
+    setStep('face-recognition');
+    setRecognizedWorker(null);
+    setDetectedEquipment({});
+    setIsAlreadyCheckedIn(false);
+  };
 
   return (
-      // 1. 전체 레이아웃 (세로 Flex): h-screen 유지
-      <div className="flex flex-col h-screen bg-slate-950">
+      <div className="size-full flex flex-col bg-black">
+        {/* 헤더 */}
+        <header className="bg-slate-950 border-b border-slate-800 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl flex items-center justify-center shadow-lg shadow-cyan-500/30">
+                <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+              </div>
+              <div>
+                <h3 className="text-white" style={{ fontWeight: 700 }}>스마트 안전 출입 시스템</h3>
+                <p className="text-gray-400 text-sm font-medium">작업자 모드</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button
+                  onClick={handleReset}
+                  variant="outline"
+                  className="bg-slate-900 border-slate-800 text-white hover:bg-slate-800 rounded-xl font-semibold"
+              >
+                <UserCheck className="w-4 h-4 mr-2" />
+                다시 인식
+              </Button>
+              <Button
+                  onClick={onBack}
+                  variant="outline"
+                  className="bg-slate-900 border-slate-800 text-white hover:bg-slate-800 rounded-xl font-semibold"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                메인 화면
+              </Button>
+            </div>
+          </div>
+        </header>
 
-        <Header />
+        {/* 메인 콘텐츠 */}
+        <div className="flex-1 flex flex-col lg:flex-row gap-4 p-4 sm:p-6 overflow-auto">
+          {/* 왼쪽: 웹캠 영역 (3/4) */}
+          <div className="flex-1 lg:w-3/4 bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden relative min-h-[300px]">
+            {/* Mock 웹캠 화면 */}
+            <div className="absolute inset-0 bg-slate-900">
+              {/* 그리드 패턴 */}
+              <div className="absolute inset-0 opacity-10" style={{
+                backgroundImage: 'linear-gradient(rgba(59, 130, 246, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(59, 130, 246, 0.5) 1px, transparent 1px)',
+                backgroundSize: '40px 40px'
+              }}></div>
 
-        {/* 2. 메인 컨텐츠 영역: p-0으로 패딩을 제거하고 justify-center로 중앙 정렬 */}
-        <main className="flex-grow flex flex-col items-center justify-center p-0 overflow-hidden">
-
-          {/* 카드 영역: max-w-none으로 너비 제한 해제. 웹캠이 화면을 가득 채우도록 설정 */}
-          <Card className="w-full max-w-none bg-slate-900 border-slate-800 shadow-2xl shadow-cyan-500/10 flex flex-col flex-grow min-h-0">
-
-            {/* CardHeader는 p-0으로 강제하여 수직 공간을 최소화 */}
-            <CardHeader className="text-center p-0 flex-shrink-0">
-              {/* CardTitle과 CardDescription 제거 */}
-            </CardHeader>
-
-            {/* 카드 내용 (웹캠): p-0으로 패딩을 제거하고 flex-grow로 남은 공간 모두 차지 */}
-            <CardContent className="flex-grow flex flex-col justify-center items-center p-0 min-h-0">
-
-              {/* 웹캠 UI 컨테이너: h-full과 w-full로 컨테이너를 가득 채움 */}
-              {/* min-w-0 / min-h-0을 적용하여 Flexbox가 크기를 유연하게 제어하도록 함 */}
-              <div className="relative w-full h-full bg-slate-950 rounded-lg overflow-hidden border border-slate-700 shadow-inner flex-grow min-h-0">
-                <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    // object-contain: 비디오 전체가 잘리지 않고 보이도록 비율 유지. 대신 빈 공간이 생김
-                    // max-h-[85vh]: 비디오 컨테이너의 최대 높이를 화면 높이의 85%로 제한하여 잘림을 방지
-                    className="w-full h-full object-contain transform -scale-x-100 max-h-full"
-                />
-
-                {/*  */}
-
-                {/* 얼굴 가이드라인 및 상태 오버레이 */}
-                <div className="absolute inset-0 flex flex-col justify-center items-center p-4">
-                  {/* 타원형 가이드라인 */}
-                  <div
-                      className={`w-3/4 h-3/4 border-4 rounded-[50%] transition-colors duration-500 
-                      ${isRecognizing ? 'border-dashed border-yellow-500' : 'border-solid border-green-500'}`}
-                  ></div>
-
-                  {/* 상태 메시지 */}
-                  <div className="absolute bottom-4 bg-black bg-opacity-50 px-4 py-2 rounded-lg text-white text-lg font-medium">
-                    {webcamError ? (
-                        <span className="text-red-500">{webcamError}</span>
-                    ) : wsConnectionError ? (
-                        <span className="text-red-500">{wsConnectionError}</span>
-                    ) : isRecognizing ? (
-                        <span className="flex items-center text-yellow-400">
-                            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                            얼굴 스캔 중...
-                        </span>
-                    ) : (
-                        <span className="text-green-400">
-                            ✅ {recognizedWorker?.name} 님, 확인되었습니다.
-                        </span>
-                    )}
+              {/* 중앙 가이드 */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-64 h-80 md:w-80 md:h-96 border-4 border-blue-500/50 rounded-3xl relative">
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-blue-500/20 backdrop-blur-sm border border-blue-500/50 rounded-full">
+                  <span className="text-blue-400 text-sm font-semibold">
+                    {step === 'face-recognition' ? '얼굴을 화면에 맞춰주세요' : '전신을 화면에 맞춰주세요'}
+                  </span>
                   </div>
+
+                  {/* 코너 마커 */}
+                  <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-cyan-400"></div>
+                  <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-cyan-400"></div>
+                  <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-cyan-400"></div>
+                  <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-cyan-400"></div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </main>
+
+              {/* 스캔 효과 */}
+              {step === 'face-recognition' && !recognizedWorker && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-full h-1 bg-gradient-to-r from-transparent via-cyan-500 to-transparent opacity-75 animate-pulse" style={{ animation: 'scan 2s infinite linear' }}></div>
+                  </div>
+              )}
+
+              {/* 인식 완료 오버레이 */}
+              {recognizedWorker && step === 'face-recognition' && (
+                  <div className="absolute inset-0 bg-green-500/20 backdrop-blur-sm flex items-center justify-center animate-in fade-in duration-500">
+                    <div className="text-center">
+                      <div className="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-2xl shadow-green-500/50">
+                        <UserCheck className="w-12 h-12 text-white" />
+                      </div>
+                      <p className="text-green-400 text-2xl font-semibold">얼굴 인식 완료</p>
+                    </div>
+                  </div>
+              )}
+
+              {/* Custom Keyframes for scanning animation */}
+              <style jsx>{`
+              @keyframes scan {
+                0% { transform: translateY(-100%) }
+                50% { transform: translateY(100%) }
+                100% { transform: translateY(-100%) }
+              }
+            `}</style>
+            </div>
+
+            {/* 하단 안내 */}
+            <div className="absolute bottom-6 left-6 right-6 bg-slate-950/90 backdrop-blur-sm border border-slate-800 rounded-xl p-4">
+              <p className="text-gray-400 text-sm text-center font-medium">
+                인식을 시작하려면 오른쪽의 "얼굴 인식 시작" 버튼을 클릭하세요
+              </p>
+            </div>
+          </div>
+
+          {/* 오른쪽: 상태 및 안내 영역 (1/4) */}
+          <div className="lg:w-1/4 flex flex-col gap-4">
+            {/* 단계 안내 */}
+            <div className="bg-slate-950 rounded-2xl border border-slate-800 p-6">
+              <div className="space-y-4">
+                {step === 'face-recognition' ? (
+                    <>
+                      <div>
+                        <h2 className="text-white text-3xl mb-2" style={{ fontWeight: 700 }}>
+                          1단계 얼굴 인식
+                        </h2>
+                        <p className="text-gray-400 text-sm font-medium">
+                          뒤로 가서 전신을 보여주세요
+                        </p>
+                      </div>
+
+                      {!recognizedWorker && (
+                          <Button
+                              onClick={handleFaceRecognition}
+                              className="w-full h-14 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-xl shadow-blue-500/30 rounded-xl"
+                              style={{ fontWeight: 700 }}
+                          >
+                            <UserCheck className="w-5 h-5 mr-2" />
+                            얼굴 인식 시작
+                          </Button>
+                      )}
+                      {/* 인식 후 상태 메시지 (출입/퇴근 버튼 활성화는 하단 액션 버튼 영역에서 처리) */}
+                      {recognizedWorker && (
+                          <div className="p-4 bg-cyan-500/10 border border-cyan-500/30 rounded-xl">
+                            <p className="text-cyan-400 text-sm text-center font-semibold mb-1">
+                              {recognizedWorker.name}님, 인식 완료
+                            </p>
+                            <p className="text-gray-400 text-xs text-center font-medium">
+                              {isAlreadyCheckedIn
+                                  ? '현장 출입 중입니다. 퇴근을 원하시면 아래 버튼을 누르세요.'
+                                  : '보호구 검사를 진행합니다. 잠시만 기다려주세요.'
+                              }
+                            </p>
+                          </div>
+                      )}
+                    </>
+                ) : (
+                    <>
+                      <div>
+                        <h2 className="text-white text-3xl mb-2" style={{ fontWeight: 700 }}>
+                          2단계 보호구 검사
+                        </h2>
+                        {recognizedWorker && (
+                            <p className="text-cyan-400 font-semibold mb-3">
+                              {recognizedWorker.name}님, 안전 검사 중
+                            </p>
+                        )}
+                        <p className="text-gray-400 text-sm font-medium">
+                          필수 보호구 착용 상태
+                        </p>
+                      </div>
+
+                      {/* 보호구 체크리스트 */}
+                      <div className="space-y-2">
+                        {requiredEquipment.map((equipment) => (
+                            <button
+                                key={equipment}
+                                onClick={() => toggleEquipment(equipment)}
+                                className={`w-full px-4 py-3 rounded-xl font-semibold transition-all shadow-md ${
+                                    detectedEquipment[equipment]
+                                        ? 'bg-green-500/20 border-2 border-green-500 text-green-400'
+                                        : 'bg-red-500/20 border-2 border-red-500 text-red-400'
+                                }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span>{equipment}</span>
+                                <span className="text-sm">
+                            {detectedEquipment[equipment] ? '✓ 착용' : '✗ 미착용'}
+                          </span>
+                              </div>
+                            </button>
+                        ))}
+                      </div>
+
+                      {/* 시뮬레이션 안내 */}
+                      <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+                        <p className="text-blue-400 text-xs text-center font-medium">
+                          💡 시뮬레이션: 보호구를 클릭하여 착용 상태를 변경하세요
+                        </p>
+                      </div>
+                    </>
+                )}
+              </div>
+            </div>
+
+            {/* 액션 버튼 */}
+            {recognizedWorker && (
+                <div className="space-y-3">
+                  {/* 출입 중인 작업자 (인식 단계에서 퇴근 처리만 가능) */}
+                  {step === 'face-recognition' && isAlreadyCheckedIn && (
+                      <Button
+                          onClick={handleCheckOutClick}
+                          className="w-full h-16 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-xl shadow-orange-500/30 rounded-xl"
+                          style={{ fontWeight: 700 }}
+                      >
+                        <LogOut className="w-5 h-5 mr-2" />
+                        퇴근
+                      </Button>
+                  )}
+
+                  {/* 보호구 검사 단계 (출입 처리 또는 퇴근(비활성화) 가능) */}
+                  {step === 'equipment-check' && (
+                      <>
+                        {/* 출입 버튼 (모두 착용 시 활성화) */}
+                        <Button
+                            onClick={handleCheckInClick}
+                            disabled={!allEquipmentDetected}
+                            className={`w-full h-16 rounded-xl text-base ${
+                                allEquipmentDetected
+                                    ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-xl shadow-green-500/30'
+                                    : 'bg-slate-900 text-gray-500 cursor-not-allowed border border-slate-800'
+                            }`}
+                            style={{ fontWeight: 700 }}
+                        >
+                          <LogIn className="w-5 h-5 mr-2" />
+                          출입
+                        </Button>
+
+                        {/* 퇴근 버튼 (이 단계에서는 비활성화하거나 숨김 처리하는 것이 일반적이지만, 시뮬레이션을 위해 비활성화 상태로 유지) */}
+                        <Button
+                            onClick={handleCheckOutClick}
+                            disabled={true}
+                            className='w-full h-16 rounded-xl text-base bg-slate-900 text-gray-500 cursor-not-allowed border border-slate-800'
+                            style={{ fontWeight: 700 }}
+                        >
+                          <LogOut className="w-5 h-5 mr-2" />
+                          퇴근 (검사 중)
+                        </Button>
+
+                        {/* 상태 안내 */}
+                        {!allEquipmentDetected && (
+                            <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
+                              <p className="text-yellow-400 text-xs text-center font-semibold">
+                                ⚠️ 모든 필수 보호구를 착용해야 출입할 수 있습니다
+                              </p>
+                            </div>
+                        )}
+
+                        {allEquipmentDetected && (
+                            <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-xl">
+                              <p className="text-green-400 text-xs text-center font-semibold">
+                                ✓ 모든 보호구 착용 완료 - 출입 버튼을 눌러주세요
+                              </p>
+                            </div>
+                        )}
+                      </>
+                  )}
+                </div>
+            )}
+          </div>
+        </div>
+
+        {/* 챗봇 */}
+        <Chatbot />
+
+        {/* 푸터 */}
+        <footer className="bg-slate-950 border-t border-slate-800 px-6 py-3">
+          <div className="text-center text-gray-500 text-sm font-medium">
+            © 2024 endnune safety systems. all rights reserved.
+          </div>
+        </footer>
       </div>
   );
 }
