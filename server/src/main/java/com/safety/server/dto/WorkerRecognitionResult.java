@@ -1,20 +1,19 @@
 package com.safety.server.dto;
 
-// src/main/java/com/safety/server/dto/WorkerRecognitionResult.java
+import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data // @Getter, @Setter, @ToString, @EqualsAndHashCode, @RequiredArgsConstructor
+@NoArgsConstructor // 기본 생성자
+@AllArgsConstructor // 모든 필드를 인자로 받는 생성자
+@JsonInclude(JsonInclude.Include.NON_NULL) // JSON 변환 시 null 필드 제외
 public class WorkerRecognitionResult {
-    private boolean recognized;
-    private String id;
-    private String name;
 
-    // Lombok 또는 생성자, Getter/Setter를 사용하여 필드 구현
-    // 예시: 생성자
-    public WorkerRecognitionResult(boolean recognized, String id, String name) {
-        this.recognized = recognized;
-        this.id = id;
-        this.name = name;
-    }
+    private String status;  // 예: "SUCCESS", "FAILURE", "ERROR"
+    private String message; // 예: "인식 성공", "인식된 작업자 없음"
+    private WorkerDto worker;  // 인식된 작업자 정보 (실패 시 null)
 
-    public boolean isRecognized() { return recognized; }
-    public String getId() { return id; }
-    public String getName() { return name; }
+    // Getter, Setter, 생성자, ToString 등이 모두 자동으로 생성됩니다.
 }
