@@ -68,8 +68,8 @@ export default defineConfig({
     open: true,
     https: {
       // 'ENOENT' 에러 방지를 위해 path.resolve를 사용한 절대 경로로 수정
-      key: fs.readFileSync(path.resolve(__dirname, 'server.key')),
-      cert: fs.readFileSync(path.resolve(__dirname, 'server.crt'))
+      key: fs.readFileSync(path.resolve(__dirname, 'safety.key')),
+      cert: fs.readFileSync(path.resolve(__dirname, 'safety.crt'))
     },
     host: '0.0.0.0'
   }
