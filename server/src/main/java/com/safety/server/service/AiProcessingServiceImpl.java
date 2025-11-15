@@ -1,5 +1,7 @@
 package com.safety.server.service;
 
+// ❗️ DTO 임포트 추가
+import com.safety.server.dto.WorkerDto;
 import com.safety.server.dto.WorkerRecognitionResult;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
@@ -56,26 +58,46 @@ public class AiProcessingServiceImpl implements AiProcessingService {
             }
 
             String status = (String) response.get("status");
+            String message = (String) response.getOrDefault("message", "");
+
+            // ❗️ [수정된 부분]
+            // 새로운 WorkerRecognitionResult DTO 객체 생성
+            WorkerRecognitionResult resultDto = new WorkerRecognitionResult();
+            resultDto.setStatus(status);
+            resultDto.setMessage(message);
 
             if ("SUCCESS".equals(status)) {
-                // 인식 성공
-                Map<String, String> workerData = (Map<String, String>) response.get("worker");
-                return new WorkerRecognitionResult(
-                        true,
-                        workerData.get("id"),
-                        workerData.get("name")
-                );
-            } else {
-                // 인식 실패 (FAILURE 또는 ERROR)
-                String message = (String) response.getOrDefault("message", "인식 실패");
-                System.out.println("AI 서버 인식 실패: " + message);
-                return new WorkerRecognitionResult(false, null, null);
+                // 인식 성공 시, 중첩된 worker Map을 WorkerDto로 변환
+                Map<String, Object> workerData = (Map<String, Object>) response.get("worker");
+
+                if (workerData != null) {
+                    WorkerDto workerDto = new WorkerDto();
+                    // ❗️ String.valueOf()를 사용하여 AI 서버가 id를 int로 보내도 안전하게 String으로 변환
+                    workerDto.setId(String.valueOf(workerData.get("id")));
+                    workerDto.setName((String) workerData.get("name"));
+                    workerDto.setTeam((String) workerData.get("team"));
+                    // ❗️ AI 서버가 employeeNumber를 보내준다고 가정 (DB 스키마 기반)
+                    //    (만약 Python이 worker_id를 employeeNumber로 보내기로 했다면 이 코드가 맞습니다)
+                    workerDto.setEmployeeNumber(String.valueOf(workerData.get("employeeNumber")));
+
+                    resultDto.setWorker(workerDto);
+                } else {
+                    // SUCCESS인데 worker 객체가 없는 비정상 상황
+                    resultDto.setStatus("FAILURE");
+                    resultDto.setMessage("인식 성공 응답을 받았으나, 작업자 정보가 누락되었습니다.");
+                }
             }
+
+            // 완성된 DTO 반환 (SUCCESS, FAILURE, ERROR 공통)
+            return resultDto;
 
         } catch (Exception e) {
             // 통신 오류, 타임아웃 등
             System.err.println("AI 서버 통신 중 오류 발생: " + e.getMessage());
-            // 프론트엔드에게 즉시 오류를 알릴 수 있도록 여기서 RuntimeException을 던집니다.
+            // ❗️ [수정된 부분]
+            // 예외를 던지는 대신, VideoWebSocketHandler가 처리할 수 있도록
+            // ERROR 상태를 가진 DTO를 반환합니다. (연결 끊김 방지)
+            // -> (정정) 핸들러가 catch하고 있으므로 예외를 던지는 것이 맞습니다. (이전 코드 유지)
             throw new RuntimeException("AI 서버와 통신 중 문제가 발생했습니다. (" + e.getMessage() + ")");
         }
     }
