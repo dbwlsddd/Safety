@@ -57,8 +57,8 @@ export default defineConfig({
     port: 3000,
     open: true,
     https: {
-      key: fs.readFileSync(path.resolve(__dirname, 'server.key')),
-      cert: fs.readFileSync(path.resolve(__dirname, 'server.crt'))
+      key: fs.readFileSync(path.resolve(__dirname, 'safety.key')),
+      cert: fs.readFileSync(path.resolve(__dirname, 'safety.crt'))
     },
 
     host: '0.0.0.0'
