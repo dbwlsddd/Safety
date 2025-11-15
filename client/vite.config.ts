@@ -4,7 +4,17 @@ import path from 'path';
 import fs from 'fs';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    // ▼▼▼ 'styled-jsx' 플러그인 설정을 추가합니다 ▼▼▼
+    react({
+      plugins: [
+        ['@swc/plugin-styled-jsx', {
+          // 이곳에 styled-jsx 관련 세부 설정을 추가할 수 있습니다.
+        }]
+      ]
+    })
+    // ▲▲▲
+  ],
   resolve: {
     extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
     alias: {
@@ -57,10 +67,10 @@ export default defineConfig({
     port: 3000,
     open: true,
     https: {
-      key: fs.readFileSync(path.resolve(__dirname, 'safety.key')),
-      cert: fs.readFileSync(path.resolve(__dirname, 'safety.crt'))
+      // 'ENOENT' 에러 방지를 위해 path.resolve를 사용한 절대 경로로 수정
+      key: fs.readFileSync(path.resolve(__dirname, 'server.key')),
+      cert: fs.readFileSync(path.resolve(__dirname, 'server.crt'))
     },
-
     host: '0.0.0.0'
   }
 });
