@@ -8,17 +8,16 @@ import { Button } from './ui/button';
 import { Chatbot } from './Chatbot';
 
 // -------------------------------------------------------------------------
-// 🛠️ 설정: 실제 환경에 맞게 이 값들을 수정하세요
+// 🛠️ 설정: Python FastAPI 서버 설정
 // -------------------------------------------------------------------------
 
-/** * 1. 실제 스프링부트 WebSocket 엔드포인트 주소
- * (예: "ws://localhost:8080/ws/safety")
+/** * 1. Python FastAPI WebSocket 엔드포인트
+ * (FastAPI 서버의 @app.websocket("/ws/face")와 일치)
  */
-const WEBSOCKET_URL = "wss://100.64.239.86:8443/ws/video"; // ⬅️ WebSocketConfig.java와 일치시켜야 함
+const WEBSOCKET_URL = "ws://100.64.239.86:9000/ws/face";
 
 /**
  * 2. 프레임 전송 간격 (밀리초 단위)
- * (예: 500ms = 0.5초에 한 번. 1초에 2프레임 전송)
  */
 const FRAME_SEND_INTERVAL_MS = 500;
 
@@ -78,7 +77,7 @@ export function WorkerMode({
     startCamera();
   }, []);
 
-  // 🛠️ 웹소켓 연결 및 프레임 전송 로직 (대폭 수정)
+  // 🛠️ [수정됨] 웹소켓 연결 및 프레임 전송 로직 (Python/FastAPI 호환)
   useEffect(() => {
     // 웹캠이 준비된 후에만 웹소켓 연결 시도
     if (!isCamReady) return;
@@ -86,12 +85,12 @@ export function WorkerMode({
     // 1. 웹소켓 연결
     websocketRef.current = new WebSocket(WEBSOCKET_URL);
 
-    // 🛠️ 중요: 서버가 바이너리 메시지를 받으므로, 전송 타입을 'blob'으로 설정
-    websocketRef.current.binaryType = "blob";
+    // ❗️ Python 서버는 JSON (Text)을 기대하므로 binaryType을 설정하지 않습니다.
+    // websocketRef.current.binaryType = "blob"; // (주석 처리)
 
     // 2. 연결 성공 시
     websocketRef.current.onopen = () => {
-      console.log("WebSocket 연결 성공");
+      console.log("WebSocket 연결 성공 (to Python FastAPI)");
       setRecognitionStatus("얼굴 인식 중...");
 
       // 3. n 밀리초마다 프레임 전송 시작
@@ -104,8 +103,6 @@ export function WorkerMode({
           return;
         }
 
-        // 🛠️ 1단계(얼굴인식)가 아니거나, 이미 인식된 상태면 프레임 전송 중지
-        // (서버의 불필요한 부하 방지)
         if (step !== 'face-recognition' || recognizedWorker) {
           return;
         }
@@ -114,81 +111,81 @@ export function WorkerMode({
         const frameDataUrl = webcamRef.current.getScreenshot();
         if (!frameDataUrl) return;
 
-        // 5. 🛠️ (Client -> Server) Base64 데이터 URL을 Blob으로 변환하여 전송
-        // (Java 서버의 handleBinaryMessage가 Blob(byte[])을 받기 때문)
-        fetch(frameDataUrl)
-            .then(res => res.blob())
-            .then(blob => {
-              if (websocketRef.current?.readyState === WebSocket.OPEN) {
-                websocketRef.current.send(blob); // 텍스트(JSON)가 아닌 바이너리(Blob) 전송
-              }
-            })
-            .catch(err => console.error("프레임 변환 및 전송 오류:", err));
+        // 5. 🛠️ [수정됨] (Client -> Server) Base64를 JSON에 담아 텍스트로 전송
+        try {
+          const payload = {
+            image: frameDataUrl // "data:image/jpeg;base64,..." 문자열 그대로
+          };
+          websocketRef.current.send(JSON.stringify(payload));
+        } catch (err) {
+          console.error("프레임 JSON 전송 오류:", err);
+        }
+
+        // [기존 Blob 전송 로직 - 삭제]
+        // fetch(frameDataUrl)
+        //     .then(res => res.blob())
+        //     .then(blob => { ... })
 
       }, FRAME_SEND_INTERVAL_MS);
     };
 
-    // 6. 🛠️ (Server -> Client) 서버로부터 메시지 수신 시 (수신 로직 수정)
+    // 6. 🛠️ [수정됨] (Server -> Client) 서버로부터 메시지 수신
     websocketRef.current.onmessage = (event) => {
       try {
-        const message = JSON.parse(event.data); // 서버는 TextMessage(JSON)로 응답함
+        const message = JSON.parse(event.data);
         console.log("서버 메시지 수신:", message);
 
-        // 🛠️ 이미 처리됐거나, 1단계가 아니면 무시
         if (step !== 'face-recognition' || recognizedWorker) {
           console.log("이미 인식되었거나, 얼굴 인식 단계가 아니므로 메시지를 무시합니다.");
           return;
         }
 
-        // 8. 🛠️ 서버 메시지 'status' 키에 따라 상태 업데이트
-        switch (message.status) { // ❗️'type'이 아닌 'status'
-
-            /** 얼굴 인식 성공 */
-          case "SUCCESS": // ❗️ "RECOGNITION_SUCCESS"가 아님
+        switch (message.status) {
+          case "SUCCESS":
             if (!message.worker) {
               console.error("SUCCESS 메시지에 'worker' 객체가 없습니다.");
               return;
             }
 
-            const worker = message.worker as Worker;
+            // 🛠️ [중요] 서버 데이터(worker_id)를 클라이언트 타입(id)으로 매핑
+            const serverWorker = message.worker;
+            const worker: Worker = {
+              id: serverWorker.worker_id, // Python 서버는 worker_id를 보냄
+              name: serverWorker.name,
+              team: serverWorker.department,
+              employeeNumber: serverWorker.employee_number,
+              // ... Worker 타입에 다른 필드가 있다면 여기에 추가
+            };
+
             setRecognizedWorker(worker);
 
+            // 이제 'worker.id'를 안전하게 사용 가능
             const alreadyCheckedIn = checkedInWorkerIds.has(worker.id);
             setIsAlreadyCheckedIn(alreadyCheckedIn);
 
             if (alreadyCheckedIn) {
-              // 이미 출입 중 -> 퇴근 대기
               setRecognitionStatus("퇴근 대기 중");
             } else {
-              // 출입 전 -> 보호구 검사 단계로 이동
               setStep('equipment-check');
               setRecognitionStatus("보호구 검사 중");
 
-              // 🛠️ 중요: 서버에 PPE 로직이 없으므로,
-              //          기존의 '시뮬레이션'용 초기값 설정을 여기서 수행합니다.
+              // 시뮬레이션용 초기값 설정 (기존 로직 유지)
               const initialEquipment: { [key: string]: boolean } = {};
               requiredEquipment.forEach(eq => {
-                // 시뮬레이션: 50% 확률로 헬멧만 착용 상태로 시작 (기존 로직)
                 initialEquipment[eq] = eq === '헬멧' ? Math.random() > 0.5 : false;
               });
               setDetectedEquipment(initialEquipment);
             }
             break;
 
-            /** 보호구 인식 결과 업데이트 -> ❗️서버에 로직이 없음 */
-            // case "PPE_DETECTION_UPDATE":
-            //   // 이 로직은 현재 서버에서 지원하지 않음.
-            //   break;
-
-            /** 얼굴 인식 실패 */
-          case "FAILURE": // ❗️ "RECOGNITION_FAILURE"가 아님
+          case "FAILURE":
+            // Python 서버는 현재 'FAILURE'를 보내지 않음 (필요 시 서버에 추가)
             setRecognitionStatus(message.message || "인식된 사용자가 없습니다.");
             setTimeout(() => {
               if (step === 'face-recognition') setRecognitionStatus("얼굴 인식 중...");
             }, 2000);
             break;
 
-            /** 서버 처리 오류 */
           case "ERROR":
             setRecognitionStatus(message.message || "서버 처리 오류");
             setTimeout(() => {
@@ -231,18 +228,16 @@ export function WorkerMode({
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
-      if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
+      if (websocketRef.current && (websocketRef.current.readyState === WebSocket.OPEN || websocketRef.current.readyState === WebSocket.CONNECTING)) {
         websocketRef.current.close();
       }
     };
 
-    // isCamReady가 true가 될 때 이 effect가 실행됨
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCamReady]);
+  }, [isCamReady]); // ❗️ 의존성 배열에서 step, recognizedWorker 등을 제거 (재연결 방지)
 
 
-  // 🛠️ 보호구 착용 시뮬레이션 (클릭하면 착용/미착용 토글)
-  // ❗️ (주석 해제) 서버에 PPE 로직이 없으므로, 시뮬레이션을 위해 이 기능은 다시 활성화합니다.
+  // 🛠️ 보호구 착용 시뮬레이션 (기존과 동일)
   const toggleEquipment = (equipment: string) => {
     setDetectedEquipment(prev => ({
       ...prev,
@@ -255,10 +250,10 @@ export function WorkerMode({
 
   // 출입 처리
   const handleCheckInClick = () => {
+    // ❗️ 'recognizedWorker.id'가 이제 매핑되어 정상 동작
     if (recognizedWorker && allEquipmentDetected) {
       onCheckIn(recognizedWorker.id);
       setIsAlreadyCheckedIn(true);
-      // 출입 성공 후 초기화 및 face-recognition 상태로 복귀
       setTimeout(() => {
         handleReset();
       }, 1000);
@@ -267,10 +262,10 @@ export function WorkerMode({
 
   // 퇴근 처리
   const handleCheckOutClick = () => {
+    // ❗️ 'recognizedWorker.id'가 이제 매핑되어 정상 동작
     if (recognizedWorker) {
       onCheckOut(recognizedWorker.id);
       setIsAlreadyCheckedIn(false);
-      // 초기화
       handleReset();
     }
   };
@@ -281,7 +276,6 @@ export function WorkerMode({
     setRecognizedWorker(null);
     setDetectedEquipment({});
     setIsAlreadyCheckedIn(false);
-    // 상태가 초기화되면, interval 로직이 자동으로 'FACE_FRAME' 전송을 다시 시작합니다.
     setRecognitionStatus("얼굴 인식 중...");
   };
 
@@ -320,7 +314,7 @@ export function WorkerMode({
           </div>
         </header>
 
-        {/* 메인 콘텐츠 */}
+        {/* 메인 콘텐츠 (기존과 동일) */}
         <div className="flex-1 flex flex-col lg:flex-row gap-4 p-4 sm:p-6 overflow-auto">
 
           {/* 왼쪽: 웹캠 영역 (3/4) */}
@@ -347,11 +341,11 @@ export function WorkerMode({
                     audio={false}
                     className="absolute inset-0 w-full h-full object-cover"
                     mirrored={true}
-                    videoConstraints={{ width: 1280, height: 720 }} // 해상도 조절 (선택 사항)
+                    videoConstraints={{ width: 1280, height: 720 }}
                 />
             )}
 
-            {/* 3. 중앙 가이드 (기존과 동일) */}
+            {/* 3. 중앙 가이드 */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
               <div className="w-64 h-80 md:w-80 md:h-96 border-4 border-blue-500/50 rounded-3xl relative">
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-blue-500/20 backdrop-blur-sm border border-blue-500/50 rounded-full">
@@ -367,14 +361,14 @@ export function WorkerMode({
               </div>
             </div>
 
-            {/* 4. 스캔 효과 (기존과 동일) */}
+            {/* 4. 스캔 효과 */}
             {step === 'face-recognition' && !recognizedWorker && isCamReady && (
                 <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
                   <div className="w-full h-1 bg-gradient-to-r from-transparent via-cyan-500 to-transparent opacity-75 animate-pulse" style={{ animation: 'scan 2s infinite linear' }}></div>
                 </div>
             )}
 
-            {/* 5. 인식 완료 오버레이 (기존과 동일) */}
+            {/* 5. 인식 완료 오버레이 */}
             {recognizedWorker && step === 'face-recognition' && (
                 <div className="absolute inset-0 bg-green-500/20 backdrop-blur-sm flex items-center justify-center animate-in fade-in duration-500 z-30">
                   <div className="text-center">
@@ -395,13 +389,13 @@ export function WorkerMode({
             }
           `}</style>
 
-            {/* 6. 하단 안내 (기존과 동일) */}
+            {/* 6. 하단 안내 */}
             <div className="absolute bottom-6 left-6 right-6 bg-slate-950/90 backdrop-blur-sm border border-slate-800 rounded-xl p-4 z-30">
               <p className="text-gray-400 text-sm text-center font-medium">
                 {step === 'face-recognition' && !recognizedWorker
-                    ? recognitionStatus // "얼굴 인식 중..."
+                    ? recognitionStatus
                     : step === 'equipment-check'
-                        ? '보호구 착용 상태를 확인(클릭)하세요.' // 🛠️ 시뮬레이션 안내
+                        ? '보호구 착용 상태를 확인(클릭)하세요.'
                         : `인식 완료: ${recognizedWorker?.name}님, ${isAlreadyCheckedIn ? '퇴근 대기 중' : '검사 완료'}`
                 }
               </p>
@@ -415,7 +409,7 @@ export function WorkerMode({
               <div className="space-y-4">
                 {step === 'face-recognition' ? (
                     <>
-                      {/* 1단계 얼굴 인식 (기존과 동일) */}
+                      {/* 1단계 얼굴 인식 */}
                       <div>
                         <h2 className="text-white text-3xl mb-2" style={{ fontWeight: 700 }}>
                           1단계 얼굴 인식
@@ -444,7 +438,7 @@ export function WorkerMode({
                             <p className="text-gray-400 text-xs text-center font-medium">
                               {isAlreadyCheckedIn
                                   ? '현장 출입 중입니다. 퇴근을 원하시면 아래 버튼을 누르세요.'
-                                  : '보호구 검사(시뮬레이션)를 진행합니다.' // 🛠️ 안내 수정
+                                  : '보호구 검사(시뮬레이션)를 진행합니다.'
                               }
                             </p>
                           </div>
@@ -469,11 +463,10 @@ export function WorkerMode({
 
                       {/* 보호구 체크리스트 */}
                       <div className="space-y-2">
-                        {/* 🛠️ 수정: onClick 핸들러 복원 (시뮬레이션을 위해) */}
                         {requiredEquipment.map((equipment) => (
                             <button
                                 key={equipment}
-                                onClick={() => toggleEquipment(equipment)} // 🛠️ 시뮬레이션 클릭 복원
+                                onClick={() => toggleEquipment(equipment)}
                                 className={`w-full px-4 py-3 rounded-xl font-semibold transition-all shadow-md ${
                                     detectedEquipment[equipment]
                                         ? 'bg-green-500/20 border-2 border-green-500 text-green-400'
@@ -490,7 +483,7 @@ export function WorkerMode({
                         ))}
                       </div>
 
-                      {/* 🛠️ 수정: 시뮬레이션 안내 */}
+                      {/* 시뮬레이션 안내 */}
                       <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl">
                         <p className="text-blue-400 text-xs text-center font-medium">
                           💡 (시뮬레이션) 보호구를 클릭하세요
@@ -501,10 +494,9 @@ export function WorkerMode({
               </div>
             </div>
 
-            {/* 액션 버튼 (기존과 동일) */}
+            {/* 액션 버튼 */}
             {recognizedWorker && (
                 <div className="space-y-3">
-                  {/* 출입 중인 작업자 (인식 단계에서 퇴근 처리만 가능) */}
                   {step === 'face-recognition' && isAlreadyCheckedIn && (
                       <Button
                           onClick={handleCheckOutClick}
@@ -516,10 +508,8 @@ export function WorkerMode({
                       </Button>
                   )}
 
-                  {/* 보호구 검사 단계 (출입 처리 또는 퇴근(비활성화) 가능) */}
                   {step === 'equipment-check' && (
                       <>
-                        {/* 출입 버튼 (모두 착용 시 활성화) */}
                         <Button
                             onClick={handleCheckInClick}
                             disabled={!allEquipmentDetected}
@@ -534,7 +524,6 @@ export function WorkerMode({
                           출입
                         </Button>
 
-                        {/* 퇴근 버튼 (이 단계에서는 비활성화) */}
                         <Button
                             onClick={handleCheckOutClick}
                             disabled={true}
@@ -545,7 +534,6 @@ export function WorkerMode({
                           퇴근 (검사 중)
                         </Button>
 
-                        {/* 상태 안내 */}
                         {!allEquipmentDetected && (
                             <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
                               <p className="text-yellow-400 text-xs text-center font-semibold">

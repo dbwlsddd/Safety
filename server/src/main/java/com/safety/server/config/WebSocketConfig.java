@@ -17,7 +17,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         // 프론트엔드(React)가 접속할 엔드포인트(주소)를 '/ws/video'로 설정합니다.
-        registry.addHandler(videoWebSocketHandler, "/ws/video")
+        registry.addHandler(videoWebSocketHandler, "/ws/face")
                 .setAllowedOrigins("*"); // TODO: 나중에는 "*" 대신 프론트엔드 주소만 허용
     }
 }
