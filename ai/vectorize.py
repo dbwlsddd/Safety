@@ -36,7 +36,7 @@ def process_missing_vectors():
         # 1. 벡터가 없는(NULL) 작업자만 조회 (public.workers로 수정됨)
         sql_select = """
                      SELECT worker_id, name, image_path
-                     FROM public.workers
+                     FROM Workers
                      WHERE face_vector IS NULL AND image_path IS NOT NULL; \
                      """
         cursor.execute(sql_select)
