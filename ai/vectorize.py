@@ -76,7 +76,7 @@ def process_missing_vectors():
 
                 # 3. DB 업데이트 (public.workers로 수정됨)
                 sql_update = """
-                             UPDATE public.workers
+                             UPDATE Workers
                              SET face_vector = %s
                              WHERE worker_id = %s \
                              """
