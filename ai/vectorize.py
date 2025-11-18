@@ -11,7 +11,7 @@ FACE_MODEL = "ArcFace"
 # ⚠️ 중요: 사진 파일들이 저장된 폴더 경로를 정확히 적으세요.
 # 현재 이 파일(vectorize.py)과 같은 폴더에 'images' 폴더가 있다면 "./images"
 # 상위 폴더에 있다면 "../images" 입니다.
-BASE_IMAGE_PATH = "./images"
+BASE_IMAGE_PATH = "../images"
 
 # ---------------------------------------------------------
 # DB 연결 정보
