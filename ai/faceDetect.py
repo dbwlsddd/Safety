@@ -1,30 +1,37 @@
-import socket
-import threading
-import base64
 import io
 import os
 import cv2
 import numpy as np
-from PIL import Image
+import base64
+import json
 import psycopg2
 import psycopg2.extras
+from PIL import Image
 from deepface import DeepFace
-import json
+
+# FastAPI 관련 임포트
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI()
+
+# CORS 설정 (리액트 포트 3000번 등에서의 접근 허용)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 실제 배포 시에는 ["http://localhost:3000"] 처럼 특정 도메인만 허용 권장
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # -------------------------------------------------------------------------
 # 설정값
-# 0.0.0.0 => 모든 네트워크 접속 허용
-# 포트는 9000번. 따라서 <서버IP>:9000 입력 시 소켓 접속 가능
-# 페이스 모델은 지니가 쓴 거 아무거나 지정
 # -------------------------------------------------------------------------
-HOST = '0.0.0.0'
-PORT = 9000
 RECOGNITION_THRESHOLD = 0.6
 FACE_MODEL_NAME = "ArcFace"
 
 # -------------------------------------------------------------------------
 # DB 연결
-# 연결 정보는 서버의 /home/user/pg/docker-compose.yaml 참고
 # -------------------------------------------------------------------------
 def get_db_connection():
     return psycopg2.connect(
@@ -36,124 +43,114 @@ def get_db_connection():
     )
 
 # -------------------------------------------------------------------------
-# Base64 → OpenCV 이미지
+# Base64 → OpenCV 이미지 변환
 # -------------------------------------------------------------------------
 def base64_to_cv2_image(base64_str):
     try:
+        # 리액트에서 "data:image/jpeg;base64," 헤더가 붙어올 경우 제거
+        if "base64," in base64_str:
+            base64_str = base64_str.split("base64,")[1]
+
         img_data = base64.b64decode(base64_str)
         img_bytes = io.BytesIO(img_data)
         img = Image.open(img_bytes)
         return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
     except Exception as e:
-        print(f"Base64 디코딩 오류: {e}")
+        print(f"이미지 디코딩 오류: {e}")
         return None
 
 # -------------------------------------------------------------------------
-# 클라이언트 처리
-# 이 함수가 while True: 라서 프로그램이 끝나지 않는 것
+# 웹 소켓 엔드포인트
+# 리액트 주소: ws://서버IP:8000/ws
 # -------------------------------------------------------------------------
-def handle_client(conn, addr):
-    print(f"[연결됨] {addr}")
-    with conn:
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    print(f"[연결 요청] {websocket.client}")
+    await websocket.accept() # 연결 수락
+
+    try:
         while True:
+            # 1. 리액트로부터 데이터 수신 (JSON 문자열 가정)
+            # 예: { "image": "base64문자열..." }
+            data = await websocket.receive_text()
+
             try:
-                # 먼저 길이 읽기 (이미지 데이터 길이)
-                length_bytes = conn.recv(8)
-                if not length_bytes:
-                    break
-                length = int.from_bytes(length_bytes, 'big')
+                json_data = json.loads(data)
+                image_base64 = json_data.get("image")
+            except json.JSONDecodeError:
+                # JSON이 아니라 그냥 base64 문자열만 보냈을 경우 대비
+                image_base64 = data
 
-                # 이미지 데이터 수신
-                data = b''
-                while len(data) < length:
-                    packet = conn.recv(length - len(data))
-                    if not packet:
-                        break
-                    data += packet
-                if not data:
-                    break
+            if not image_base64:
+                continue
 
-                # Base64 디코딩
-                image_cv = base64_to_cv2_image(data.decode('utf-8'))
-                if image_cv is None:
-                    continue  # 얼굴 없으면 아무 반환 없이 계속
+            # 2. 이미지 변환
+            image_cv = base64_to_cv2_image(image_base64)
+            if image_cv is None:
+                continue
 
-                # DeepFace 벡터 추출
-                try:
-                    embedding_objs = DeepFace.represent(
-                        img_path=image_cv,
-                        model_name=FACE_MODEL_NAME,
-                        enforce_detection=True
-                    )
-                    input_vector = embedding_objs[0]["embedding"]
-                except Exception as e:
-                    print(f"얼굴 벡터 추출 실패: {e}")
-                    continue  # 얼굴 없으면 루프 계속
+            # 3. DeepFace 분석 (동기 함수이므로 주의, 실제 운영시 비동기 처리 권장)
+            try:
+                # DeepFace는 무거워서 여기서 잠깐 멈칫할 수 있음
+                embedding_objs = DeepFace.represent(
+                    img_path=image_cv,
+                    model_name=FACE_MODEL_NAME,
+                    enforce_detection=True
+                )
+                input_vector = embedding_objs[0]["embedding"]
+            except Exception as e:
+                # 얼굴 감지 실패 시 조용히 넘어감 (또는 에러 메시지 전송)
+                # print(f"얼굴 감지 실패: {e}")
+                continue
 
-                # DB 검색
-                try:
-                    conn_db = get_db_connection()
-                    cursor = conn_db.cursor(cursor_factory=psycopg2.extras.DictCursor)
-                    query = """
-                        SELECT 
-                            worker_id, 
-                            name, 
+            # 4. DB 검색
+            found_worker = None
+            conn_db = None
+            try:
+                conn_db = get_db_connection()
+                cursor = conn_db.cursor(cursor_factory=psycopg2.extras.DictCursor)
+                query = """
+                        SELECT
+                            worker_id,
+                            name,
                             department,
-                            face_vector <=> %s AS distance,
-                            image_path,
-                            created_at
-                        FROM 
+                            face_vector <=> %s AS distance
+                        FROM
                             workers
-                        ORDER BY 
+                        ORDER BY
                             distance
-                        LIMIT 1;
-                    """
-                    cursor.execute(query, (str(input_vector),))
-                    result = cursor.fetchone()
-                except Exception as e:
-                    print(f"DB 오류: {e}")
-                    continue
-                finally:
-                    if conn_db:
-                        conn_db.close()
+                            LIMIT 1; \
+                        """
+                cursor.execute(query, (str(input_vector),))
+                result = cursor.fetchone()
 
-                # 임계값 비교
                 if result and result["distance"] < RECOGNITION_THRESHOLD:
-                    response = {
-                        "status": "SUCCESS",
-                        "worker": {
-                            "worker_id": str(result["worker_id"]),
-                            "name": result["name"],
-                            "department": result["department"]
-                        }
+                    found_worker = {
+                        "worker_id": str(result["worker_id"]),
+                        "name": result["name"],
+                        "department": result["department"],
+                        "distance": float(result["distance"]) # float 변환 필요
                     }
-                    conn.sendall(json.dumps(response).encode('utf-8'))
-                else:
-                    # 얼굴은 감지됐지만 일치하는 작업자 없음 → 아무 반환 없음
-                    continue
 
             except Exception as e:
-                print(f"[에러] {e}")
-                break
-    print(f"[연결 종료] {addr}")
+                print(f"DB 에러: {e}")
+            finally:
+                if conn_db:
+                    conn_db.close()
 
-# -------------------------------------------------------------------------
-# 메인 서버
-# -------------------------------------------------------------------------
-def start_server():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((HOST, PORT))
-        s.listen()
-        print(f"[서버 시작] {HOST}:{PORT}")
-        while True:
-            conn, addr = s.accept()
-            thread = threading.Thread(target=handle_client, args=(conn, addr))
-            thread.start()
+            # 5. 결과 전송 (찾았을 때만 보냄)
+            if found_worker:
+                response = {
+                    "status": "SUCCESS",
+                    "worker": found_worker
+                }
+                await websocket.send_json(response)
+            else:
+                # 못 찾았을 때도 알려주고 싶으면 아래 주석 해제
+                # await websocket.send_json({"status": "FAIL"})
+                pass
 
-
-# -------------------------------------------------------------------------
-# 이 py 파일의 시작 부분
-# pyenv activate face 이후 python faceDetect.py 입력할 때의 최초 진입점
-# -------------------------------------------------------------------------
-if __name__ == "__main__":
-    start_server()
+    except WebSocketDisconnect:
+        print(f"[연결 종료] {websocket.client}")
+    except Exception as e:
+        print(f"[시스템 에러] {e}")
