@@ -14,7 +14,7 @@ import { Chatbot } from './Chatbot';
 /** * 1. Python FastAPI WebSocket 엔드포인트
  * (FastAPI 서버의 @app.websocket("/ws/face")와 일치)
  */
-const WEBSOCKET_URL = "ws://100.64.239.86:9000/ws/face";
+const WEBSOCKET_URL = "wss://100.64.239.86:9000/ws/face";
 
 /**
  * 2. 프레임 전송 간격 (밀리초 단위)
