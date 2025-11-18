@@ -2,15 +2,16 @@ import os
 import psycopg2
 import psycopg2.extras
 from deepface import DeepFace
+import numpy as np  # ⬅️ [필수] 한글 경로 처리를 위해 추가
+import cv2          # ⬅️ [필수] 한글 경로 처리를 위해 추가
 
 # ---------------------------------------------------------
 # 설정
 # ---------------------------------------------------------
 FACE_MODEL = "ArcFace"
 
-# ⚠️ 중요: 사진 파일들이 저장된 폴더 경로를 정확히 적으세요.
-# 현재 이 파일(vectorize.py)과 같은 폴더에 'images' 폴더가 있다면 "./images"
-# 상위 폴더에 있다면 "../images" 입니다.
+# ⚠️ 중요: 사진 파일들이 저장된 폴더 경로
+# 예: 현재 폴더 상위에 images 폴더가 있다면 "../images"
 BASE_IMAGE_PATH = "../images"
 
 # ---------------------------------------------------------
@@ -33,11 +34,12 @@ def process_missing_vectors():
 
         print("🔍 벡터가 없는 작업자를 검색합니다...")
 
-        # 1. 벡터가 없는(NULL) 작업자만 조회 (public.workers로 수정됨)
+        # 1. public.workers 테이블 조회
+        # (이미지 경로는 있지만 벡터가 NULL인 사람만)
         sql_select = """
                      SELECT worker_id, name, image_path
-                     FROM workers
-                     WHERE face_vector IS NULL AND image_path IS NOT NULL; \
+                     FROM public.workers
+                     WHERE face_vector IS NULL AND image_path IS NOT NULL;
                      """
         cursor.execute(sql_select)
         rows = cursor.fetchall()
@@ -55,7 +57,7 @@ def process_missing_vectors():
         for row in rows:
             w_id = row['worker_id']
             name = row['name']
-            db_path = row['image_path'] # 예: "user1.jpg"
+            db_path = row['image_path'] # 예: "이유진.png"
 
             # 전체 파일 경로 조합
             full_path = os.path.join(BASE_IMAGE_PATH, db_path)
@@ -65,22 +67,39 @@ def process_missing_vectors():
                     print(f"⚠️ [파일 없음] {name} ({full_path}) - 건너뜀")
                     continue
 
+                # --- 🛠️ [핵심 수정] 한글 경로 이미지 읽기 ---
+                # 파이썬의 open()이나 cv2.imread()는 한글 경로를 잘 못 읽습니다.
+                # numpy로 파일을 바이너리로 읽은 뒤, cv2로 디코딩해야 합니다.
+                try:
+                    img_array = np.fromfile(full_path, np.uint8)
+                    img_cv = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+                except Exception as e:
+                    print(f"⚠️ [이미지 로딩 실패] {name}: {e}")
+                    continue
+
+                if img_cv is None:
+                    print(f"⚠️ [이미지 디코딩 실패] {name} ({full_path})")
+                    continue
+                # ---------------------------------------------
+
                 # DeepFace 변환
-                # enforce_detection=False: 얼굴이 작거나 흐려도 최대한 변환 시도
+                # img_path에 경로 대신 읽어온 이미지 데이터(img_cv)를 넘깁니다.
                 embedding_objs = DeepFace.represent(
-                    img_path=full_path,
+                    img_path=img_cv,
                     model_name=FACE_MODEL,
                     enforce_detection=False
                 )
-                embedding = embedding_objs[0]["embedding"]
+                embedding = embedding_objs[0]["embedding"] # 파이썬 리스트 [0.1, 0.2, ...]
 
-                # 3. DB 업데이트 (public.workers로 수정됨)
+                # 3. DB 업데이트 (public.workers)
                 sql_update = """
-                             UPDATE workers
+                             UPDATE public.workers
                              SET face_vector = %s
-                             WHERE worker_id = %s \
+                             WHERE worker_id = %s
                              """
-                cursor.execute(sql_update, (str(embedding), w_id))
+
+                # 🛠️ pgvector는 파이썬 리스트를 그대로 받습니다 (str 변환 X)
+                cursor.execute(sql_update, (embedding, w_id))
                 conn.commit()
 
                 print(f"🆗 [성공] {name}님 변환 완료")
@@ -88,7 +107,7 @@ def process_missing_vectors():
 
             except Exception as e:
                 print(f"❌ [에러] {name} 처리 중 오류: {e}")
-                # 오류가 나도 다음 사람으로 계속 진행
+                conn.rollback() # 오류 발생 시 해당 트랜잭션 취소
 
         print("-" * 50)
         print(f"🎉 전체 변환 완료: {success_count} / {len(rows)} 명")
