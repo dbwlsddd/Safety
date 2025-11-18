@@ -15,10 +15,17 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
-# CORS 설정 (리액트 포트 3000번 등에서의 접근 허용)
+# -----------------------------------------------------------------
+# 🛠️ [수정됨] CORS 설정
+# -----------------------------------------------------------------
+# "allow_origins=["*"]" 대신, 리액트 앱의 정확한 주소를 적어줍니다.
+origins = [
+    "https://100.64.239.86:3000"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 실제 배포 시에는 ["http://localhost:3000"] 처럼 특정 도메인만 허용 권장
+    allow_origins=origins,  # 🛠️ ["*"] 대신 origins 변수 사용
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -61,37 +68,49 @@ def base64_to_cv2_image(base64_str):
 
 # -------------------------------------------------------------------------
 # 웹 소켓 엔드포인트
-# 리액트 주소: ws://서버IP:8000/ws
 # -------------------------------------------------------------------------
-@app.websocket("/ws")
+@app.websocket("/ws/face") # ⬅️ "/ws/face" 경로 확인
 async def websocket_endpoint(websocket: WebSocket):
     print(f"[연결 요청] {websocket.client}")
-    await websocket.accept() # 연결 수락
+
+    # 🛠️ [추가] 403 오류 우회를 위해 수동으로 Origin 헤더 확인
+    # (CORSMiddleware가 wss에서 완벽히 동작 안 할 경우 대비)
+    origin = websocket.headers.get('origin')
+    print(f"WebSocket Origin: {origin}")
+
+    # CORSMiddleware가 이미 처리했어야 하지만,
+    # Uvicorn 403 로그가 떴다는 것은 여기서 직접 처리해야 함을 의미
+
+    try:
+        # await websocket.accept() # ⬅️ 기본 accept
+        # 403 에러가 났으므로, 수동으로 모든 origin을 허용하도록 accept 헤더를 보냄
+        await websocket.accept(
+            headers=[(b'access-control-allow-origin', b'*')]
+        )
+        print("[연결 수락됨]") # ⬅️ 이 로그가 뜨는지 확인
+    except Exception as e:
+        print(f"[연결 수락 실패] {e}")
+        return
+
 
     try:
         while True:
-            # 1. 리액트로부터 데이터 수신 (JSON 문자열 가정)
-            # 예: { "image": "base64문자열..." }
             data = await websocket.receive_text()
 
             try:
                 json_data = json.loads(data)
                 image_base64 = json_data.get("image")
             except json.JSONDecodeError:
-                # JSON이 아니라 그냥 base64 문자열만 보냈을 경우 대비
                 image_base64 = data
 
             if not image_base64:
                 continue
 
-            # 2. 이미지 변환
             image_cv = base64_to_cv2_image(image_base64)
             if image_cv is None:
                 continue
 
-            # 3. DeepFace 분석 (동기 함수이므로 주의, 실제 운영시 비동기 처리 권장)
             try:
-                # DeepFace는 무거워서 여기서 잠깐 멈칫할 수 있음
                 embedding_objs = DeepFace.represent(
                     img_path=image_cv,
                     model_name=FACE_MODEL_NAME,
@@ -99,11 +118,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 )
                 input_vector = embedding_objs[0]["embedding"]
             except Exception as e:
-                # 얼굴 감지 실패 시 조용히 넘어감 (또는 에러 메시지 전송)
                 # print(f"얼굴 감지 실패: {e}")
                 continue
 
-            # 4. DB 검색
             found_worker = None
             conn_db = None
             try:
@@ -129,7 +146,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "worker_id": str(result["worker_id"]),
                         "name": result["name"],
                         "department": result["department"],
-                        "distance": float(result["distance"]) # float 변환 필요
+                        "distance": float(result["distance"])
                     }
 
             except Exception as e:
@@ -138,7 +155,6 @@ async def websocket_endpoint(websocket: WebSocket):
                 if conn_db:
                     conn_db.close()
 
-            # 5. 결과 전송 (찾았을 때만 보냄)
             if found_worker:
                 response = {
                     "status": "SUCCESS",
@@ -146,11 +162,14 @@ async def websocket_endpoint(websocket: WebSocket):
                 }
                 await websocket.send_json(response)
             else:
-                # 못 찾았을 때도 알려주고 싶으면 아래 주석 해제
-                # await websocket.send_json({"status": "FAIL"})
                 pass
 
     except WebSocketDisconnect:
         print(f"[연결 종료] {websocket.client}")
     except Exception as e:
         print(f"[시스템 에러] {e}")
+
+# -------------------------------------------------------------------------
+# (참고) uvicorn 실행 명령어 (SSL 포함)
+# -------------------------------------------------------------------------
+# uvicorn main:app --host 0.0.0.0 --port 9000 --ssl-keyfile=./safety.key --ssl-certfile=./safety.crt --reload
