@@ -24,7 +24,7 @@ const equipmentOptions: EquipmentOption[] = [
   { name: '방호복', icon: ShieldCheck },
   { name: '보호경', icon: Glasses },
   { name: '조끼', icon: Shirt },
-  { name: '작업화', icon: Footprints },
+  { name: '안전화', icon: Footprints },
   { name: '하네스', icon: Anchor },
 ];
 
