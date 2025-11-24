@@ -2,19 +2,33 @@ import { useState, useEffect } from 'react';
 import { ModeSelection } from './components/ModeSelection';
 import { AdminDashboard } from './components/AdminDashboard';
 import { WorkerMode } from './components/WorkerMode';
-import { Worker, AccessLogEntry } from './types';
+import { InspectionScreen } from './components/InspectionScreen';
+import { Worker, AccessLogEntry, SystemConfig } from './types';
 
-// API URL 설정
+type Screen = 'mode-selection' | 'admin' | 'worker' | 'inspection';
+
+// API 주소 확인
 const API_BASE_URL = "https://100.64.239.86:8080/api";
 
-function App() {
-  const [mode, setMode] = useState<'selection' | 'admin' | 'worker'>('selection');
+// 기본 설정값
+const defaultConfig: SystemConfig = {
+  requiredEquipment: ['헬멧', '안전조끼'],
+  warningDelaySeconds: 10,
+};
+
+export default function App() {
+  const [currentScreen, setCurrentScreen] = useState<Screen>('mode-selection');
+
+  // 🛠️ [수정됨] 더미 데이터 제거하고 빈 배열([])로 초기화 -> Dashboard 오류 해결 핵심
   const [workers, setWorkers] = useState<Worker[]>([]);
-  const [accessLogs, setAccessLogs] = useState<AccessLogEntry[]>([]);
+  const [logs, setLogs] = useState<AccessLogEntry[]>([]);
 
+  const [config, setConfig] = useState<SystemConfig>(defaultConfig);
+  const [inspectionPassed, setInspectionPassed] = useState(false);
+  const [currentWorkerId, setCurrentWorkerId] = useState<string | null>(null);
   const [checkedInWorkerIds, setCheckedInWorkerIds] = useState<Set<string>>(new Set());
-  const [requiredEquipment, setRequiredEquipment] = useState<string[]>(['헬멧', '안전조끼']);
 
+  // 앱 시작 시 서버에서 데이터 가져오기
   useEffect(() => {
     fetchWorkers();
   }, []);
@@ -31,12 +45,23 @@ function App() {
           team: w.department || w.team || '미지정',
         }));
         setWorkers(mappedWorkers);
-      } else {
-        console.error("작업자 목록 로드 실패");
       }
     } catch (error) {
-      console.error("API 통신 오류:", error);
+      console.error("서버 연결 실패 (무시 가능):", error);
     }
+  };
+
+  const handleAddWorker = (worker: Omit<Worker, 'id'>) => {
+    const newWorker: Worker = { ...worker, id: Date.now().toString() };
+    setWorkers([...workers, newWorker]);
+  };
+
+  const handleUpdateWorker = (id: string, updatedWorker: Omit<Worker, 'id'>) => {
+    setWorkers(workers.map(w => (w.id === id ? { ...updatedWorker, id } : w)));
+  };
+
+  const handleDeleteWorker = (id: string) => {
+    setWorkers(workers.filter(w => w.id !== id));
   };
 
   const handleBulkUpload = async (newWorkers: any[]) => {
@@ -50,12 +75,10 @@ function App() {
         team: w.team,
         mappedFileName: w.photoFile ? w.photoFile.name : null
       });
-
       if (w.photoFile) {
         formData.append("files", w.photoFile);
       }
     }
-
     formData.append("data", JSON.stringify(dtos));
 
     try {
@@ -63,46 +86,84 @@ function App() {
         method: "POST",
         body: formData,
       });
-
       if (response.ok) {
-        alert("일괄 등록이 완료되었습니다.");
+        alert("일괄 등록 완료");
         fetchWorkers();
       } else {
-        const errorText = await response.text();
-        alert("등록 실패: " + errorText);
+        alert("등록 실패");
       }
     } catch (error) {
       console.error("업로드 오류:", error);
-      alert("서버 통신 중 오류가 발생했습니다.");
+      alert("통신 오류");
     }
   };
 
-  const handleAddWorker = (worker: Omit<Worker, 'id'>) => {
-    const newWorker = { ...worker, id: Date.now().toString() };
-    setWorkers([...workers, newWorker]);
+  const handleDeleteLog = (id: string) => {
+    setLogs(logs.filter(l => l.id !== id));
   };
 
-  const handleUpdateWorker = (id: string, updatedWorker: Omit<Worker, 'id'>) => {
-    setWorkers(workers.map(w => w.id === id ? { ...w, ...updatedWorker } : w));
+  const addLog = (log: Omit<AccessLogEntry, 'id' | 'timestamp'>) => {
+    const newLog: AccessLogEntry = {
+      ...log,
+      id: Date.now().toString(),
+      timestamp: new Date(),
+    };
+    setLogs(prevLogs => [newLog, ...prevLogs]);
   };
 
-  const handleDeleteWorker = (id: string) => {
-    setWorkers(workers.filter(w => w.id !== id));
+  const handleSaveConfig = (newConfig: SystemConfig) => {
+    setConfig(newConfig);
+  };
+
+  const handleSelectMode = (mode: 'admin' | 'worker') => {
+    if (mode === 'admin') {
+      setCurrentScreen('admin');
+    } else {
+      setCurrentScreen('worker');
+      setInspectionPassed(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setCurrentScreen('mode-selection');
+  };
+
+  const handleInspectionPass = () => {
+    setInspectionPassed(true);
+    const worker = workers.find(w => w.id === currentWorkerId);
+    if (worker) {
+      addLog({
+        workerName: worker.name,
+        activity: '검사',
+        status: '성공',
+        details: '보호구 착용 확인',
+      });
+    }
+    setCurrentScreen('worker');
+  };
+
+  const handleInspectionFail = () => {
+    const worker = workers.find(w => w.id === currentWorkerId);
+    if (worker) {
+      addLog({
+        workerName: worker.name,
+        activity: '검사',
+        status: '실패',
+        details: '보호구 미착용',
+      });
+    }
+    setCurrentScreen('worker');
   };
 
   const handleCheckIn = (workerId: string) => {
     const worker = workers.find(w => w.id === workerId);
     if (worker) {
-      const newLog: AccessLogEntry = {
-        id: Date.now().toString(),
-        workerId: worker.id,
+      addLog({
         workerName: worker.name,
-        timestamp: new Date().toISOString(),
         activity: '출입',
         status: '성공',
-        details: '안전 장비 착용 확인됨'
-      };
-      setAccessLogs([newLog, ...accessLogs]);
+        details: '입장',
+      });
       setCheckedInWorkerIds(prev => new Set(prev).add(workerId));
     }
   };
@@ -110,65 +171,57 @@ function App() {
   const handleCheckOut = (workerId: string) => {
     const worker = workers.find(w => w.id === workerId);
     if (worker) {
-      const newLog: AccessLogEntry = {
-        id: Date.now().toString(),
-        workerId: worker.id,
+      addLog({
         workerName: worker.name,
-        timestamp: new Date().toISOString(),
         activity: '퇴근',
         status: '성공',
-        details: '퇴근 처리 완료'
-      };
-      setAccessLogs([newLog, ...accessLogs]);
-      setCheckedInWorkerIds(prev => {
-        const next = new Set(prev);
-        next.delete(workerId);
-        return next;
+        details: '퇴근',
       });
+      const newSet = new Set(checkedInWorkerIds);
+      newSet.delete(workerId);
+      setCheckedInWorkerIds(newSet);
     }
-  };
-
-  const handleDeleteLog = (id: string) => {
-    setAccessLogs(accessLogs.filter(log => log.id !== id));
+    setInspectionPassed(false);
   };
 
   return (
-      <>
-        {mode === 'selection' && (
-            <ModeSelection
-                // 🛠️ [수정됨] 기존 onSelectAdmin -> onSelectMode 로 변경
-                onSelectMode={() => setMode('admin')}
-                onSelectWorker={() => setMode('worker')}
-            />
+      <div className="size-full">
+        {currentScreen === 'mode-selection' && (
+            <ModeSelection onSelectMode={handleSelectMode} />
         )}
-
-        {mode === 'admin' && (
+        {currentScreen === 'admin' && (
             <AdminDashboard
                 workers={workers}
-                accessLogs={accessLogs}
-                onBack={() => setMode('selection')}
+                logs={logs}
+                config={config}
                 onAddWorker={handleAddWorker}
                 onUpdateWorker={handleUpdateWorker}
                 onDeleteWorker={handleDeleteWorker}
                 onBulkUpload={handleBulkUpload}
                 onDeleteLog={handleDeleteLog}
-                requiredEquipment={requiredEquipment}
-                onUpdateRequiredEquipment={setRequiredEquipment}
+                onSaveConfig={handleSaveConfig}
+                onLogout={handleLogout}
             />
         )}
-
-        {mode === 'worker' && (
+        {currentScreen === 'worker' && (
             <WorkerMode
                 workers={workers}
-                requiredEquipment={requiredEquipment}
+                requiredEquipment={config.requiredEquipment}
                 checkedInWorkerIds={checkedInWorkerIds}
                 onCheckIn={handleCheckIn}
                 onCheckOut={handleCheckOut}
-                onBack={() => setMode('selection')}
+                onBack={handleLogout}
             />
         )}
-      </>
+        {currentScreen === 'inspection' && (
+            <InspectionScreen
+                requiredEquipment={config.requiredEquipment}
+                warningDelaySeconds={config.warningDelaySeconds}
+                onBack={() => setCurrentScreen('worker')}
+                onPass={handleInspectionPass}
+                onFail={handleInspectionFail}
+            />
+        )}
+      </div>
   );
 }
-
-export default App;
