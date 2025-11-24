@@ -26,10 +26,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize ->
                         authorize
                                 // 4. [가장 중요] React가 접속할 /ws/video 엔드포인트는 인증 없이 허용
-                                .requestMatchers("/ws/video/**").permitAll()
+                                .requestMatchers("/ws/video/**", "/api/**").permitAll()
 
                                 // 5. 그 외 모든 요청은 일단 인증을 요구하도록 설정 (선택 사항)
-                                .anyRequest().authenticated()
+                                //.anyRequest().authenticated()
+                                .anyRequest().permitAll()
                 );
 
         return http.build();
