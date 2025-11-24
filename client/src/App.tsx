@@ -12,7 +12,7 @@ const API_BASE_URL = "https://100.64.239.86:8443/api";
 
 // 기본 설정값
 const defaultConfig: SystemConfig = {
-  requiredEquipment: ['헬멧', '안전조끼'],
+  requiredEquipment: ['헬멧', '조끼'],
   warningDelaySeconds: 10,
 };
 
