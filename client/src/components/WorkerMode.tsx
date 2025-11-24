@@ -85,13 +85,18 @@ export function WorkerMode({
     // 1. 웹소켓 연결
     websocketRef.current = new WebSocket(WEBSOCKET_URL);
 
-    // ❗️ Python 서버는 JSON (Text)을 기대하므로 binaryType을 설정하지 않습니다.
-    // websocketRef.current.binaryType = "blob"; // (주석 처리)
-
     // 2. 연결 성공 시
     websocketRef.current.onopen = () => {
       console.log("WebSocket 연결 성공 (to Python FastAPI)");
       setRecognitionStatus("얼굴 인식 중...");
+
+      // 🛠️ [추가] 연결 즉시 '설정(CONFIG)' 메시지 전송
+      // Python 서버가 이 메시지를 받으면 검사 리스트를 업데이트함
+      const configPayload = {
+        type: "CONFIG",
+        required: requiredEquipment // 관리자가 설정한 보호구 리스트 전송
+      };
+      websocketRef.current.send(JSON.stringify(configPayload));
 
       // 3. n 밀리초마다 프레임 전송 시작
       intervalRef.current = setInterval(() => {
@@ -120,11 +125,6 @@ export function WorkerMode({
         } catch (err) {
           console.error("프레임 JSON 전송 오류:", err);
         }
-
-        // [기존 Blob 전송 로직 - 삭제]
-        // fetch(frameDataUrl)
-        //     .then(res => res.blob())
-        //     .then(blob => { ... })
 
       }, FRAME_SEND_INTERVAL_MS);
     };
@@ -169,6 +169,11 @@ export function WorkerMode({
               setStep('equipment-check');
               setRecognitionStatus("보호구 검사 중");
 
+              // 실제 감지된 장비 상태 반영
+              // message.ppe_status.detections 등을 활용할 수 있으나,
+              // 여기서는 시뮬레이션 로직 대신 서버에서 받은 결과를 쓴다고 가정하거나
+              // 기존 시뮬레이션 로직 유지 (사용자 요청에 따라 유지)
+
               // 시뮬레이션용 초기값 설정 (기존 로직 유지)
               const initialEquipment: { [key: string]: boolean } = {};
               requiredEquipment.forEach(eq => {
@@ -179,7 +184,6 @@ export function WorkerMode({
             break;
 
           case "FAILURE":
-            // Python 서버는 현재 'FAILURE'를 보내지 않음 (필요 시 서버에 추가)
             setRecognitionStatus(message.message || "인식된 사용자가 없습니다.");
             setTimeout(() => {
               if (step === 'face-recognition') setRecognitionStatus("얼굴 인식 중...");
@@ -234,7 +238,7 @@ export function WorkerMode({
     };
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCamReady]); // ❗️ 의존성 배열에서 step, recognizedWorker 등을 제거 (재연결 방지)
+  }, [isCamReady, requiredEquipment]); // ❗️ requiredEquipment가 변경되면 재연결하여 설정 전송
 
 
   // 🛠️ 보호구 착용 시뮬레이션 (기존과 동일)
