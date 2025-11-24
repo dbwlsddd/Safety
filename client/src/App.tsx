@@ -8,7 +8,7 @@ import { Worker, AccessLogEntry, SystemConfig } from './types';
 type Screen = 'mode-selection' | 'admin' | 'worker' | 'inspection';
 
 // API 주소 확인
-const API_BASE_URL = "https://100.64.239.86:8080/api";
+const API_BASE_URL = "https://100.64.239.86:8443/api";
 
 // 기본 설정값
 const defaultConfig: SystemConfig = {
