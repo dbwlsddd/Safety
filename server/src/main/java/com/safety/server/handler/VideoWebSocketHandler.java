@@ -1,95 +1,68 @@
-// server/src/main/java/com/safety/server/handler/VideoWebSocketHandler.java
-
 package com.safety.server.handler;
-
-// ... (기존 import)
-import java.io.IOException; // ❗️ 이 import는 여전히 필요합니다.
-import java.nio.ByteBuffer;
-import java.util.HashMap;
-import java.util.Map;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
-import org.springframework.web.socket.BinaryMessage;
-import org.springframework.web.socket.CloseStatus;
-import org.springframework.web.socket.TextMessage;
-import org.springframework.web.socket.WebSocketSession;
-import org.springframework.web.socket.handler.AbstractWebSocketHandler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.safety.server.dto.WorkerRecognitionResult;
-import com.safety.server.service.AiProcessingService;
+import org.springframework.stereotype.Component;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.web.socket.CloseStatus;
+import org.springframework.web.socket.TextMessage;
+import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.handler.TextWebSocketHandler;
 
-import lombok.extern.slf4j.Slf4j;
+import java.io.IOException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
-@Slf4j
 @Component
-public class VideoWebSocketHandler extends AbstractWebSocketHandler {
+public class VideoWebSocketHandler extends TextWebSocketHandler {
 
-    @Autowired
-    private AiProcessingService aiProcessingService;
+    private final SimpMessagingTemplate messagingTemplate;
+    private final ObjectMapper objectMapper;
+    private final ConcurrentMap<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
 
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @Override
-    public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-        log.info("프론트엔드 연결 성공: {}", session.getId());
+    // 생성자 주입
+    public VideoWebSocketHandler(SimpMessagingTemplate messagingTemplate) {
+        this.messagingTemplate = messagingTemplate;
+        this.objectMapper = new ObjectMapper();
     }
 
     @Override
-    protected void handleBinaryMessage(WebSocketSession session, BinaryMessage message) {
-        // ❗️ try 블록은 그대로 둡니다.
+    public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+        sessions.put(session.getId(), session);
+        System.out.println("[WebSocket] 클라이언트 연결됨: " + session.getId());
+    }
+
+    @Override
+    public void handleTextMessage(WebSocketSession session, TextMessage message) throws IOException {
+        String payload = message.getPayload();
+
         try {
-            ByteBuffer byteBuffer = message.getPayload();
-            byte[] frameData = new byte[byteBuffer.remaining()];
-            byteBuffer.get(frameData);
+            // 1. 수신된 JSON 데이터를 DTO로 파싱
+            WorkerRecognitionResult result = objectMapper.readValue(payload, WorkerRecognitionResult.class);
 
-            if (frameData.length == 0) {
-                log.warn("빈 프레임 수신: {}", session.getId());
-                return;
+            // 2. 인식이 성공했고, 작업자 정보가 있는 경우에만 처리
+            if ("SUCCESS".equals(result.getStatus()) && result.getWorker() != null) {
+
+                // 3. STOMP Topic으로 브로드캐스팅 (/topic/safety-realtime)
+                // 관리자 대시보드가 이 토픽을 구독하고 있습니다.
+                messagingTemplate.convertAndSend("/topic/safety-realtime", result);
+
+                // 로그 출력 (디버깅용)
+                if (result.getPpeStatus() != null) {
+                    String safetyLog = result.getPpeStatus().isSafe() ? "✅ 안전" : "🚨 위반";
+                    System.out.println("[실시간 감지] " + result.getWorker().getName() + " -> " + safetyLog);
+                }
             }
 
-            // AI 서비스 호출
-            WorkerRecognitionResult result = aiProcessingService.processFrameForRecognition(frameData);
-
-            // 성공 응답 전송
-            Map<String, Object> response = new HashMap<>();
-            if (result != null && "SUCCESS".equals(result.getStatus())) {
-                response.put("status", "SUCCESS");
-                response.put("message", result.getMessage());
-                response.put("worker", result.getWorker());
-            } else {
-                response.put("status", "FAILURE");
-                response.put("message", result != null ? result.getMessage() : "인식된 작업자 없음");
-            }
-            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(response)));
-
-        } catch (Exception e) { // ❗️ (1차 오류) AI 서비스 오류(RuntimeException)가 여기서 잡힙니다.
-            log.error("AI 서버 통신 및 처리 오류: {}", e.getMessage());
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("status", "ERROR");
-            errorResponse.put("message", "AI 서버 통신 및 처리 오류: " + e.getMessage());
-
-            // ❗️ [수정된 부분]
-            // 클라이언트에게 오류 응답을 보내는 과정에서도 예외가 발생할 수 있으므로,
-            // IOException만 잡는 대신 모든 Exception을 잡도록 변경합니다.
-            try {
-                session.sendMessage(new TextMessage(objectMapper.writeValueAsString(errorResponse)));
-            } catch (Exception innerException) { // ❗️ IOException -> Exception
-                log.error("AI 서버 오류 응답 전송 실패 (이것이 연결 끊김의 원인이었을 수 있음): {}", innerException.getMessage());
-                // 이 예외는 다시 던지지 않습니다. (연결 유지를 위해)
-            }
+        } catch (Exception e) {
+            System.err.println("데이터 처리 중 오류 발생: " + e.getMessage());
+            // 필요 시 에러 응답 전송 로직 추가 가능
         }
     }
 
     @Override
-    public void handleTransportError(WebSocketSession session, Throwable exception) throws Exception {
-        log.error("웹소켓 전송 오류 발생: {} - {}", session.getId(), exception.getMessage());
-    }
-
-    @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
-        log.info("프론트엔드 연결 끊김: {} (Code: {}, Reason: {})", session.getId(), status.getCode(), status.getReason());
+        sessions.remove(session.getId());
+        System.out.println("[WebSocket] 클라이언트 연결 종료: " + session.getId());
     }
 }
