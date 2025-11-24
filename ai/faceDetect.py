@@ -216,23 +216,31 @@ async def websocket_endpoint(websocket: WebSocket):
                     if conn_db:
                         conn_db.close()
 
-            # 2. 🔥 보호구 감지 실행
-            ppe_result = detect_ppe(image_cv)
+            # -------------------------------------------------------------------
+            # 🔥 [핵심 수정] 작업자가 DB에서 인식된 경우에만 다음 로직 실행 및 응답 전송
+            # -------------------------------------------------------------------
+            if found_worker:
+                # 2. 보호구 감지 실행 (인식된 경우에만 실행하여 자원 절약 및 로직 단순화)
+                ppe_result = detect_ppe(image_cv)
 
-            # 3. 🔥 결과 종합하여 클라이언트에 응답
-            status = "SUCCESS" if found_worker else "FAILURE"
+                # 3. 결과 종합하여 클라이언트에 응답
+                status = "SUCCESS"
 
-            # 응답 JSON 구조
-            response = {
-                "status": status,
-                "worker": found_worker,  # 인식 성공 시 작업자 정보, 실패 시 None
-                "ppe_status": {
-                    "is_safe": ppe_result["is_safe"], # 보호구 착용 여부 (True/False)
-                    "detections": ppe_result["detections"] # 감지된 보호구 목록 (박스, 라벨 등)
+                # 응답 JSON 구조
+                response = {
+                    "status": status,
+                    "worker": found_worker,  # 인식 성공 시 작업자 정보
+                    "ppe_status": {
+                        "is_safe": ppe_result["is_safe"], # 보호구 착용 여부 (True/False)
+                        "detections": ppe_result["detections"] # 감지된 보호구 목록 (박스, 라벨 등)
+                    }
                 }
-            }
 
-            await websocket.send_json(response)
+                await websocket.send_json(response)
+            else:
+                # DB에 등록되지 않은 사람이거나, 사람이 없는 경우: 프론트엔드에 응답을 보내지 않고 루프를 계속함
+                # 프론트엔드는 응답이 없으면 상태를 변경하지 않으므로 '인식된 사용자가 없습니다' 메시지가 뜨지 않게 됨.
+                pass
 
 
     except WebSocketDisconnect:
