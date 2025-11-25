@@ -9,8 +9,8 @@ import { WorkerFormData } from './components/WorkerManagement'; // 🛠️ 타�
 type Screen = 'mode-selection' | 'admin' | 'worker' | 'inspection';
 
 // 🛠️ [중요] API 주소 및 서버 주소 설정
-const API_BASE_URL = "http://100.64.239.86:8443/api";
-const SERVER_URL = "http://100.64.239.86:8443"; // 이미지를 불러올 서버 루트 주소
+const API_BASE_URL = "https://100.64.239.86:8443/api";
+const SERVER_URL = "https://100.64.239.86:8443"; // 이미지를 불러올 서버 루트 주소
 
 // 기본 설정값
 const defaultConfig: SystemConfig = {
