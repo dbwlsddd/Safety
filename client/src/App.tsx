@@ -4,6 +4,7 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { WorkerMode } from './components/WorkerMode';
 import { InspectionScreen } from './components/InspectionScreen';
 import { Worker, AccessLogEntry, SystemConfig } from './types';
+import { WorkerFormData } from './components/WorkerManagement'; // 🛠️ 타입 추가
 
 type Screen = 'mode-selection' | 'admin' | 'worker' | 'inspection';
 
@@ -19,7 +20,6 @@ const defaultConfig: SystemConfig = {
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('mode-selection');
 
-  // 🛠️ [수정됨] 더미 데이터 제거하고 빈 배열([])로 초기화 -> Dashboard 오류 해결 핵심
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [logs, setLogs] = useState<AccessLogEntry[]>([]);
 
@@ -43,6 +43,7 @@ export default function App() {
           name: w.name,
           employeeNumber: w.employeeNumber,
           team: w.department || w.team || '미지정',
+          photoPath: w.imagePath, // 필요시 타입 확장에 추가
         }));
         setWorkers(mappedWorkers);
       }
@@ -51,17 +52,89 @@ export default function App() {
     }
   };
 
-  const handleAddWorker = (worker: Omit<Worker, 'id'>) => {
-    const newWorker: Worker = { ...worker, id: Date.now().toString() };
-    setWorkers([...workers, newWorker]);
+  // 🛠️ [수정됨] FormData를 이용한 개별 등록 구현
+  const handleAddWorker = async (workerData: WorkerFormData) => {
+    const formData = new FormData();
+    formData.append("employeeNumber", workerData.employeeNumber);
+    formData.append("name", workerData.name);
+    formData.append("team", workerData.team);
+
+    if (workerData.photoFile) {
+      formData.append("photoFile", workerData.photoFile);
+    } else {
+      alert("사진은 필수입니다.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/workers`, {
+        method: "POST",
+        body: formData, // Content-Type 헤더는 fetch가 자동 설정 (multipart/form-data)
+      });
+
+      if (response.ok) {
+        alert("작업자가 등록되었습니다.");
+        fetchWorkers(); // 목록 새로고침
+      } else {
+        const errorText = await response.text();
+        alert(`등록 실패: ${errorText}`);
+      }
+    } catch (error) {
+      console.error("등록 오류:", error);
+      alert("서버 통신 오류 발생");
+    }
   };
 
-  const handleUpdateWorker = (id: string, updatedWorker: Omit<Worker, 'id'>) => {
-    setWorkers(workers.map(w => (w.id === id ? { ...updatedWorker, id } : w)));
+  // 🛠️ [수정됨] FormData를 이용한 개별 수정 구현
+  const handleUpdateWorker = async (id: string, workerData: WorkerFormData) => {
+    const formData = new FormData();
+    formData.append("employeeNumber", workerData.employeeNumber);
+    formData.append("name", workerData.name);
+    formData.append("team", workerData.team);
+
+    // 파일이 있는 경우에만 추가 (파일 없으면 백엔드에서 기존 사진 유지)
+    if (workerData.photoFile) {
+      formData.append("photoFile", workerData.photoFile);
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/workers/${id}`, {
+        method: "PUT",
+        body: formData,
+      });
+
+      if (response.ok) {
+        alert("작업자 정보가 수정되었습니다.");
+        fetchWorkers();
+      } else {
+        const errorText = await response.text();
+        alert(`수정 실패: ${errorText}`);
+      }
+    } catch (error) {
+      console.error("수정 오류:", error);
+      alert("서버 통신 오류 발생");
+    }
   };
 
-  const handleDeleteWorker = (id: string) => {
-    setWorkers(workers.filter(w => w.id !== id));
+  // 🛠️ [수정됨] 서버 API 호출로 삭제 구현
+  const handleDeleteWorker = async (id: string) => {
+    if (!window.confirm("정말 삭제하시겠습니까?")) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/workers/${id}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        alert("삭제되었습니다.");
+        fetchWorkers();
+      } else {
+        alert("삭제 실패");
+      }
+    } catch (error) {
+      console.error("삭제 오류:", error);
+      alert("서버 통신 오류");
+    }
   };
 
   const handleBulkUpload = async (newWorkers: any[]) => {

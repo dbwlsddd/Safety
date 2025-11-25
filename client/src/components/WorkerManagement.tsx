@@ -5,20 +5,18 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Label } from './ui/label';
-import * as XLSX from 'xlsx'; // 🛠️ npm install xlsx 필요
+import * as XLSX from 'xlsx';
 
-// 일괄 등록 시 사용할 확장된 데이터 타입
-export interface BulkWorkerData extends Omit<Worker, 'id'> {
+// 🛠️ 타입 정의 확장 (파일 포함)
+export interface WorkerFormData extends Omit<Worker, 'id'> {
   photoFile?: File | null;
 }
 
 interface WorkerManagementProps {
   workers: Worker[];
-  onAddWorker: (worker: Omit<Worker, 'id'>) => void;
-  onUpdateWorker: (id: string, worker: Omit<Worker, 'id'>) => void;
+  onAddWorker: (worker: WorkerFormData) => void;
+  onUpdateWorker: (id: string, worker: WorkerFormData) => void;
   onDeleteWorker: (id: string) => void;
-  // 기존 인터페이스 유지하되 내부에서 데이터를 처리하여 전달하거나 타입을 확장해야 함
-  // 여기서는 편의상 any[]로 처리하거나, 실제 구현 시 부모 컴포넌트 타입을 수정해야 함
   onBulkUpload: (workers: any[]) => void;
 }
 
@@ -39,7 +37,14 @@ export function WorkerManagement({
 
   // 데이터 상태
   const [currentWorker, setCurrentWorker] = useState<Worker | null>(null);
-  const [formData, setFormData] = useState({ employeeNumber: '', name: '', team: '' });
+
+  // 🛠️ photoFile 상태 추가
+  const [formData, setFormData] = useState<WorkerFormData>({
+    employeeNumber: '',
+    name: '',
+    team: '',
+    photoFile: null
+  });
 
   // 🛠️ 일괄 등록용 상태
   const [bulkStep, setBulkStep] = useState<1 | 2>(1); // 1: 파일선택, 2: 매칭확인
@@ -53,11 +58,18 @@ export function WorkerManagement({
       worker.team.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // 🛠️ 파일 선택 핸들러
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFormData(prev => ({ ...prev, photoFile: e.target.files![0] }));
+    }
+  };
+
   // 개별 등록
   const handleAdd = () => {
     if (formData.employeeNumber && formData.name && formData.team) {
       onAddWorker(formData);
-      setFormData({ employeeNumber: '', name: '', team: '' });
+      setFormData({ employeeNumber: '', name: '', team: '', photoFile: null });
       setShowAddDialog(false);
     }
   };
@@ -68,7 +80,7 @@ export function WorkerManagement({
       onUpdateWorker(currentWorker.id, formData);
       setShowEditDialog(false);
       setCurrentWorker(null);
-      setFormData({ employeeNumber: '', name: '', team: '' });
+      setFormData({ employeeNumber: '', name: '', team: '', photoFile: null });
     }
   };
 
@@ -87,6 +99,7 @@ export function WorkerManagement({
       employeeNumber: worker.employeeNumber,
       name: worker.name,
       team: worker.team,
+      photoFile: null // 수정 시 파일은 초기화 (새로 올릴 때만 설정)
     });
     setShowEditDialog(true);
   };
@@ -117,7 +130,6 @@ export function WorkerManagement({
       // 자동 매칭 로직: 이름이 파일명에 포함되면 매칭
       const newMatchMap: {[key: string]: File | null} = {};
       excelData.forEach((row, idx) => {
-        // 엑셀 컬럼명 대응 (이름, name 등)
         const workerName = row['이름'] || row['name'] || '';
         if (workerName) {
           const matchedFile = files.find(f => f.name.includes(workerName));
@@ -150,10 +162,8 @@ export function WorkerManagement({
       photoFile: matchMap[idx] // 파일 객체 포함
     }));
 
-    // 부모 컴포넌트로 전송 (FormData 변환 등은 부모 혹은 API 서비스에서 처리)
     onBulkUpload(workersToUpload);
 
-    // 초기화 및 닫기
     setShowBulkUploadDialog(false);
     setBulkStep(1);
     setExcelData([]);
@@ -185,7 +195,7 @@ export function WorkerManagement({
           <div className="flex gap-3">
             <Button
                 onClick={() => {
-                  setFormData({ employeeNumber: '', name: '', team: '' });
+                  setFormData({ employeeNumber: '', name: '', team: '', photoFile: null });
                   setShowAddDialog(true);
                 }}
                 className="flex-1 sm:flex-none bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white border border-white/20 rounded-xl font-semibold"
@@ -289,6 +299,21 @@ export function WorkerManagement({
                     className="bg-slate-800 border-slate-700 text-white"
                 />
               </div>
+              {/* 🛠️ 사진 업로드 필드 추가 */}
+              <div>
+                <Label className="text-white mb-2 block">작업자 사진 (필수)</Label>
+                <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="bg-slate-800 border-slate-700 text-white cursor-pointer"
+                />
+                {formData.photoFile && (
+                    <p className="text-green-400 text-xs mt-1 flex items-center">
+                      <Check className="w-3 h-3 mr-1" /> {formData.photoFile.name}
+                    </p>
+                )}
+              </div>
               <div className="flex gap-2 justify-end pt-4">
                 <Button
                     variant="outline"
@@ -341,6 +366,24 @@ export function WorkerManagement({
                     onChange={(e) => setFormData({ ...formData, team: e.target.value })}
                     className="bg-slate-800 border-slate-700 text-white"
                 />
+              </div>
+              {/* 🛠️ 수정용 사진 업로드 필드 */}
+              <div>
+                <Label className="text-white mb-2 block">작업자 사진 교체 (선택)</Label>
+                <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="bg-slate-800 border-slate-700 text-white cursor-pointer"
+                />
+                <p className="text-gray-500 text-xs mt-1">
+                  * 새로운 사진을 선택하지 않으면 기존 사진이 유지됩니다.
+                </p>
+                {formData.photoFile && (
+                    <p className="text-green-400 text-xs mt-1 flex items-center">
+                      <Check className="w-3 h-3 mr-1" /> {formData.photoFile.name} (교체 예정)
+                    </p>
+                )}
               </div>
               <div className="flex gap-2 justify-end pt-4">
                 <Button
@@ -397,7 +440,7 @@ export function WorkerManagement({
           </DialogContent>
         </Dialog>
 
-        {/* 🛠️ 엑셀 일괄 등록 다이얼로그 (Step별 UI 적용) */}
+        {/* 🛠️ 엑셀 일괄 등록 다이얼로그 */}
         <Dialog open={showBulkUploadDialog} onOpenChange={setShowBulkUploadDialog}>
           <DialogContent className="bg-slate-900 border-slate-700 max-w-4xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
