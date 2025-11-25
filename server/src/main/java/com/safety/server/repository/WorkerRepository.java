@@ -25,4 +25,15 @@ public interface WorkerRepository extends JpaRepository<Worker, Long> {
             @Param("imagePath") String imagePath,
             @Param("faceVector") String faceVector
     );
+
+    @Modifying
+    @Query(value = "UPDATE workers SET name = :name, employee_number = :empNum, department = :team, image_path = :imagePath, face_vector = CAST(:vectorJson AS vector) WHERE worker_id = :id", nativeQuery = true)
+    void updateWorkerWithVector(
+            @Param("id") Long id,
+            @Param("name") String name,
+            @Param("empNum") String employeeNumber,
+            @Param("team") String team,
+            @Param("imagePath") String imagePath,
+            @Param("vectorJson") String vectorJson
+    );
 }
