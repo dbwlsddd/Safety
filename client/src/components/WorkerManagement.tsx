@@ -231,9 +231,9 @@ export function WorkerManagement({
               <tbody>
               {filteredWorkers.map((worker) => (
                   <tr key={worker.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                    {/* 🛠️ [추가] 사진 데이터 표시 */}
-                    <td className="px-6 py-4">
-                      <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-700 border border-slate-600">
+                    {/* 🛠️ [수정] Hover Zoom 디자인 적용 */}
+                    <td className="px-6 py-4 relative group">
+                      <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-700 border border-slate-600 transition-all duration-200 ease-out group-hover:scale-[2.5] group-hover:z-50 group-hover:shadow-2xl group-hover:border-blue-400 origin-left">
                         {worker.photoUrl ? (
                             <img
                                 src={worker.photoUrl}
