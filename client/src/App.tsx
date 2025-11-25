@@ -4,12 +4,13 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { WorkerMode } from './components/WorkerMode';
 import { InspectionScreen } from './components/InspectionScreen';
 import { Worker, AccessLogEntry, SystemConfig } from './types';
-import { WorkerFormData } from './components/WorkerManagement'; // 🛠️ 타입 추가
+import { WorkerFormData } from './components/WorkerManagement'; // 🛠️ 타입 임포트
 
 type Screen = 'mode-selection' | 'admin' | 'worker' | 'inspection';
 
-// API 주소 확인
+// 🛠️ [중요] API 주소 및 서버 주소 설정
 const API_BASE_URL = "https://100.64.239.86:8443/api";
+const SERVER_URL = "https://100.64.239.86:8443"; // 이미지를 불러올 서버 루트 주소
 
 // 기본 설정값
 const defaultConfig: SystemConfig = {
@@ -38,13 +39,23 @@ export default function App() {
       const response = await fetch(`${API_BASE_URL}/workers`);
       if (response.ok) {
         const data = await response.json();
-        const mappedWorkers: Worker[] = data.map((w: any) => ({
-          id: String(w.id),
-          name: w.name,
-          employeeNumber: w.employeeNumber,
-          team: w.department || w.team || '미지정',
-          photoPath: w.imagePath, // 필요시 타입 확장에 추가
-        }));
+        const mappedWorkers: Worker[] = data.map((w: any) => {
+          // 🛠️ DB 이미지 경로(../images/...)를 웹 URL(/images/...)로 변환
+          let photoUrl = null;
+          if (w.imagePath) {
+            // "../images/"를 제거하고 "/images/"로 맞춤
+            const cleanPath = w.imagePath.replace("../images/", "images/");
+            photoUrl = `${SERVER_URL}/${cleanPath}`;
+          }
+
+          return {
+            id: String(w.id),
+            name: w.name,
+            employeeNumber: w.employeeNumber,
+            team: w.department || w.team || '미지정',
+            photoUrl: photoUrl, // 변환된 URL 저장
+          };
+        });
         setWorkers(mappedWorkers);
       }
     } catch (error) {

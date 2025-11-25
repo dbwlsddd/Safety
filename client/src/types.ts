@@ -15,6 +15,7 @@ export interface Worker {
   employeeNumber: string;
   name: string;
   team: string;
+  photoUrl?: string;
 }
 
 export interface AccessLogEntry {

@@ -35,6 +35,7 @@ public class SecurityConfig {
                 // 4. 인가 설정
                 .authorizeHttpRequests(authorize ->
                         authorize
+                                .requestMatchers("/images/**").permitAll()
                                 // ⚠️ Preflight 요청(OPTIONS)은 인증 없이 무조건 허용해야 함 (중요)
                                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                                 // API 및 소켓 경로 허용

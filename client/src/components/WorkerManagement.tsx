@@ -220,6 +220,8 @@ export function WorkerManagement({
             <table className="w-full">
               <thead>
               <tr className="bg-slate-700/30 border-b border-white/10">
+                {/* 🛠️ [추가] 사진 컬럼 헤더 */}
+                <th className="px-6 py-4 text-left text-sm text-blue-100 font-semibold">사진</th>
                 <th className="px-6 py-4 text-left text-sm text-blue-100 font-semibold">사번</th>
                 <th className="px-6 py-4 text-left text-sm text-blue-100 font-semibold">이름</th>
                 <th className="px-6 py-4 text-left text-sm text-blue-100 font-semibold">소속팀</th>
@@ -229,6 +231,24 @@ export function WorkerManagement({
               <tbody>
               {filteredWorkers.map((worker) => (
                   <tr key={worker.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                    {/* 🛠️ [추가] 사진 데이터 표시 */}
+                    <td className="px-6 py-4">
+                      <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-700 border border-slate-600">
+                        {worker.photoUrl ? (
+                            <img
+                                src={worker.photoUrl}
+                                alt={worker.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  // 이미지 로드 실패 시 숨김 처리
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                            />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">No</div>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-sm text-blue-100 font-medium">{worker.employeeNumber}</td>
                     <td className="px-6 py-4 text-sm text-white font-semibold">{worker.name}</td>
                     <td className="px-6 py-4 text-sm text-blue-100 font-medium">{worker.team}</td>
@@ -252,7 +272,7 @@ export function WorkerManagement({
               ))}
               {filteredWorkers.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-6 py-12 text-center text-blue-200 font-medium">
+                    <td colSpan={5} className="px-6 py-12 text-center text-blue-200 font-medium">
                       등록된 작업자가 없습니다
                     </td>
                   </tr>
@@ -299,7 +319,7 @@ export function WorkerManagement({
                     className="bg-slate-800 border-slate-700 text-white"
                 />
               </div>
-              {/* 🛠️ 사진 업로드 필드 추가 */}
+              {/* 🛠️ 사진 업로드 필드 */}
               <div>
                 <Label className="text-white mb-2 block">작업자 사진 (필수)</Label>
                 <Input
@@ -440,7 +460,7 @@ export function WorkerManagement({
           </DialogContent>
         </Dialog>
 
-        {/* 🛠️ 엑셀 일괄 등록 다이얼로그 */}
+        {/* 엑셀 일괄 등록 다이얼로그 */}
         <Dialog open={showBulkUploadDialog} onOpenChange={setShowBulkUploadDialog}>
           <DialogContent className="bg-slate-900 border-slate-700 max-w-4xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
