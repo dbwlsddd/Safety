@@ -136,6 +136,7 @@ public class WorkerService {
         }
     }
 
+    // 파일 저장 헬퍼 메서드
     private String saveFile(MultipartFile file, String employeeNumber) throws IOException {
         Path uploadPath = Paths.get(UPLOAD_DIR);
         if (!Files.exists(uploadPath)) {
@@ -143,8 +144,18 @@ public class WorkerService {
         }
 
         String originalName = file.getOriginalFilename();
-        // 파일명 충돌 방지용 UUID 추가
-        String fileName = employeeNumber + "_" + UUID.randomUUID().toString() + "_" + originalName;
+
+        // 🛠️ [핵심 수정] 한글 깨짐 방지를 위해 "원본 파일명"은 버리고 "확장자"만 추출
+        String extension = "";
+        if (originalName != null && originalName.contains(".")) {
+            extension = originalName.substring(originalName.lastIndexOf("."));
+        } else {
+            extension = ".jpg"; // 확장자가 없는 경우 안전하게 jpg로 처리
+        }
+
+        // 최종 파일명: 사번_UUID_확장자 (예: 202401_a1b2-c3d4.jpg) -> 100% 영어/숫자
+        String fileName = employeeNumber + "_" + UUID.randomUUID().toString() + extension;
+
         Path path = uploadPath.resolve(fileName);
         Files.write(path, file.getBytes());
 
