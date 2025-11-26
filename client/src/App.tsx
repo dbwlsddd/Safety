@@ -272,7 +272,8 @@ export default function App() {
 
   const handleBulkDelete = async (ids: string[]) => {
     try {
-      const response = await fetch("https://100.64.239.86:9000/api/workers/batch", {
+      // 👇 API_BASE_URL을 사용하도록 수정해주세요 (8443 포트)
+      const response = await fetch(`${API_BASE_URL}/workers/batch`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(ids),
@@ -281,12 +282,14 @@ export default function App() {
       if (response.ok) {
         // 성공 시 목록 새로고침
         await fetchWorkers();
-        // toast.success("삭제되었습니다."); // 알림 라이브러리 사용 시
+        alert("삭제되었습니다."); // (선택 사항) 사용자 알림 추가
       } else {
         console.error("삭제 실패");
+        alert("삭제에 실패했습니다.");
       }
     } catch (error) {
       console.error("일괄 삭제 에러:", error);
+      alert("서버 통신 오류가 발생했습니다.");
     }
   };
 
