@@ -157,8 +157,8 @@ export function WorkerManagement({
   const executeBulkUpload = () => {
     const workersToUpload = excelData.map((row, idx) => ({
       employeeNumber: row['사번'] || row['employeeNumber'] || '',
-      name: row['이름'] || row['name'] || '',
-      team: row['소속'] || row['team'] || row['소속팀'] ||'',
+      name: row['이름'] || row['name'] || row['성명'] || '',
+      team: row['소속'] || row['team'] || row['소속팀'] || row['부서'] || row['팀'] || '',
       photoFile: matchMap[idx] // 파일 객체 포함
     }));
 
