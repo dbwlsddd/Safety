@@ -462,136 +462,142 @@ export function WorkerManagement({
 
         {/* 엑셀 일괄 등록 다이얼로그 */}
         <Dialog open={showBulkUploadDialog} onOpenChange={setShowBulkUploadDialog}>
-          <DialogContent className="bg-slate-900 border-slate-700 max-w-4xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
+          {/* 🛠️ [수정 1] DialogContent에서 overflow-y-auto 제거, flex-col 적용 */}
+          {/* max-h-[90vh]로 모달 전체 높이를 화면의 90%로 제한하고, 내부에서 스크롤 처리 */}
+          <DialogContent className="bg-slate-900 border-slate-700 max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+            <DialogHeader className="flex-none"> {/* flex-none으로 헤더 크기 고정 */}
               <DialogTitle className="text-white">엑셀 일괄 등록</DialogTitle>
               <DialogDescription className="text-gray-400">
                 {bulkStep === 1 ? "엑셀 명단과 작업자 사진을 업로드하세요." : "사진 매칭을 확인하세요."}
               </DialogDescription>
             </DialogHeader>
 
-            {bulkStep === 1 && (
-                <div className="space-y-6 py-4">
-                  {/* 1. 엑셀 업로드 영역 */}
-                  <div className="space-y-2">
-                    <Label className="text-white">1. 작업자 명단 (엑셀)</Label>
-                    <div className="border-2 border-dashed border-slate-700 rounded-xl p-6 text-center hover:border-cyan-500/50 transition-colors">
-                      <input type="file" accept=".xlsx,.xls" onChange={handleExcelFile} className="hidden" id="excel-upload" />
-                      <label htmlFor="excel-upload" className="cursor-pointer block">
-                        {excelData.length > 0 ? (
-                            <div className="text-green-400 font-semibold flex items-center justify-center gap-2">
-                              <Check className="w-5 h-5"/> {excelData.length}명 명단 로드 완료
-                            </div>
-                        ) : (
-                            <>
-                              <FileSpreadsheet className="w-8 h-8 text-gray-500 mx-auto mb-2" />
-                              <span className="text-gray-400">엑셀 파일을 선택하세요</span>
-                            </>
-                        )}
-                      </label>
+            {/* 🛠️ [수정 2] 컨텐츠 영역을 flex-1로 설정하여 남은 공간 차지 */}
+            <div className="flex-1 overflow-y-auto p-1">
+
+              {bulkStep === 1 && (
+                  <div className="space-y-6 py-4">
+                    {/* ... (기존 업로드 UI 코드 유지) ... */}
+                    {/* 1. 엑셀 업로드 영역 */}
+                    <div className="space-y-2">
+                      <Label className="text-white">1. 작업자 명단 (엑셀)</Label>
+                      <div className="border-2 border-dashed border-slate-700 rounded-xl p-6 text-center hover:border-cyan-500/50 transition-colors">
+                        <input type="file" accept=".xlsx,.xls" onChange={handleExcelFile} className="hidden" id="excel-upload" />
+                        <label htmlFor="excel-upload" className="cursor-pointer block">
+                          {excelData.length > 0 ? (
+                              <div className="text-green-400 font-semibold flex items-center justify-center gap-2">
+                                <Check className="w-5 h-5"/> {excelData.length}명 명단 로드 완료
+                              </div>
+                          ) : (
+                              <>
+                                <FileSpreadsheet className="w-8 h-8 text-gray-500 mx-auto mb-2" />
+                                <span className="text-gray-400">엑셀 파일을 선택하세요</span>
+                              </>
+                          )}
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* 2. 사진 업로드 영역 */}
+                    <div className="space-y-2">
+                      <Label className="text-white">2. 작업자 사진 (전체 선택)</Label>
+                      <div className="border-2 border-dashed border-slate-700 rounded-xl p-6 text-center hover:border-cyan-500/50 transition-colors">
+                        <input type="file" accept="image/*" multiple onChange={handlePhotoFiles} className="hidden" id="photo-upload" />
+                        <label htmlFor="photo-upload" className="cursor-pointer block">
+                          {uploadedPhotos.length > 0 ? (
+                              <div className="text-green-400 font-semibold flex items-center justify-center gap-2">
+                                <Check className="w-5 h-5"/> {uploadedPhotos.length}장 사진 로드 완료
+                              </div>
+                          ) : (
+                              <>
+                                <ImageIcon className="w-8 h-8 text-gray-500 mx-auto mb-2" />
+                                <span className="text-gray-400">사진 파일들을 드래그하거나 선택하세요</span>
+                              </>
+                          )}
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-4">
+                      <Button
+                          onClick={() => setBulkStep(2)}
+                          disabled={excelData.length === 0}
+                          className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white"
+                      >
+                        다음: 매칭 확인
+                      </Button>
                     </div>
                   </div>
+              )}
 
-                  {/* 2. 사진 업로드 영역 */}
-                  <div className="space-y-2">
-                    <Label className="text-white">2. 작업자 사진 (전체 선택)</Label>
-                    <div className="border-2 border-dashed border-slate-700 rounded-xl p-6 text-center hover:border-cyan-500/50 transition-colors">
-                      <input type="file" accept="image/*" multiple onChange={handlePhotoFiles} className="hidden" id="photo-upload" />
-                      <label htmlFor="photo-upload" className="cursor-pointer block">
-                        {uploadedPhotos.length > 0 ? (
-                            <div className="text-green-400 font-semibold flex items-center justify-center gap-2">
-                              <Check className="w-5 h-5"/> {uploadedPhotos.length}장 사진 로드 완료
-                            </div>
-                        ) : (
-                            <>
-                              <ImageIcon className="w-8 h-8 text-gray-500 mx-auto mb-2" />
-                              <span className="text-gray-400">사진 파일들을 드래그하거나 선택하세요</span>
-                            </>
-                        )}
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end pt-4">
-                    <Button
-                        onClick={() => setBulkStep(2)}
-                        disabled={excelData.length === 0}
-                        className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white"
-                    >
-                      다음: 매칭 확인
-                    </Button>
-                  </div>
-                </div>
-            )}
-
-            {bulkStep === 2 && (
-                <div className="space-y-4 py-4">
-                  {/* 매칭 리스트 테이블 */}
-                  {/* 🛠️ [수정] 테이블 컨테이너에 테두리 추가 및 스타일 보완 */}
-                  <div className="bg-slate-800/50 rounded-lg overflow-hidden border border-slate-700">
-                    {/* 🛠️ [추가] 내부 스크롤 영역 생성 및 최대 높이(max-h-[50vh]) 제한 */}
-                    <div className="max-h-[50vh] overflow-y-auto custom-scrollbar">
-                      <table className="w-full text-sm text-left relative">
-                        {/* 🛠️ [수정] 테이블 헤더 고정 (sticky top-0) */}
-                        <thead className="bg-slate-700 text-gray-300 sticky top-0 z-10 shadow-md">
-                        <tr>
-                          <th className="p-3 font-semibold">이름</th>
-                          <th className="p-3 font-semibold">사번</th>
-                          <th className="p-3 font-semibold">사진 상태</th>
-                          <th className="p-3 text-right font-semibold">관리</th>
-                        </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-700/50">
-                        {excelData.map((row, idx) => {
-                          const isMatched = !!matchMap[idx];
-                          return (
-                              <tr key={idx} className="hover:bg-slate-700/30 transition-colors">
-                                <td className="p-3 text-white">{row['이름'] || row['name']}</td>
-                                <td className="p-3 text-gray-400">{row['사번'] || row['employeeNumber']}</td>
-                                <td className="p-3">
-                                  {isMatched ? (
-                                      <span className="text-green-400 flex items-center gap-1">
+              {bulkStep === 2 && (
+                  <div className="space-y-4 py-4 h-full flex flex-col">
+                    {/* 매칭 리스트 테이블 */}
+                    <div className="bg-slate-800/50 rounded-lg overflow-hidden border border-slate-700 flex-1 min-h-0 relative flex flex-col">
+                      {/* 🛠️ [수정 3] style 속성을 사용하여 높이와 스크롤을 강제로 적용 */}
+                      <div style={{ maxHeight: '50vh', overflowY: 'auto' }} className="custom-scrollbar w-full">
+                        <table className="w-full text-sm text-left">
+                          {/* 헤더 고정 */}
+                          <thead className="bg-slate-700 text-gray-300 sticky top-0 z-10 shadow-md">
+                          <tr>
+                            <th className="p-3 font-semibold">이름</th>
+                            <th className="p-3 font-semibold">사번</th>
+                            <th className="p-3 font-semibold">사진 상태</th>
+                            <th className="p-3 text-right font-semibold">관리</th>
+                          </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-700/50">
+                          {excelData.map((row, idx) => {
+                            const isMatched = !!matchMap[idx];
+                            return (
+                                <tr key={idx} className="hover:bg-slate-700/30 transition-colors">
+                                  <td className="p-3 text-white">{row['이름'] || row['name']}</td>
+                                  <td className="p-3 text-gray-400">{row['사번'] || row['employeeNumber']}</td>
+                                  <td className="p-3">
+                                    {isMatched ? (
+                                        <span className="text-green-400 flex items-center gap-1">
                                                   <Check className="w-3 h-3"/> {matchMap[idx]?.name}
                                               </span>
-                                  ) : (
-                                      <span className="text-red-400 flex items-center gap-1">
+                                    ) : (
+                                        <span className="text-red-400 flex items-center gap-1">
                                                   <AlertCircle className="w-3 h-3"/> 사진 없음
                                               </span>
-                                  )}
-                                </td>
-                                <td className="p-3 text-right">
-                                  {!isMatched && (
-                                      <select
-                                          className="bg-slate-800 border border-slate-600 text-xs text-white rounded p-1 cursor-pointer hover:border-blue-500 transition-colors"
-                                          onChange={(e) => {
-                                            const file = uploadedPhotos.find(f => f.name === e.target.value);
-                                            if(file) handleManualMatch(idx.toString(), file);
-                                          }}
-                                      >
-                                        <option value="">사진 선택...</option>
-                                        {/* 소거법: 아직 선택되지 않은 사진만 표시 */}
-                                        {getUnusedPhotos().map(photo => (
-                                            <option key={photo.name} value={photo.name}>{photo.name}</option>
-                                        ))}
-                                      </select>
-                                  )}
-                                </td>
-                              </tr>
-                          );
-                        })}
-                        </tbody>
-                      </table>
+                                    )}
+                                  </td>
+                                  <td className="p-3 text-right">
+                                    {!isMatched && (
+                                        <select
+                                            className="bg-slate-800 border border-slate-600 text-xs text-white rounded p-1 cursor-pointer hover:border-blue-500 transition-colors"
+                                            onChange={(e) => {
+                                              const file = uploadedPhotos.find(f => f.name === e.target.value);
+                                              if(file) handleManualMatch(idx.toString(), file);
+                                            }}
+                                        >
+                                          <option value="">사진 선택...</option>
+                                          {/* 소거법: 아직 선택되지 않은 사진만 표시 */}
+                                          {getUnusedPhotos().map(photo => (
+                                              <option key={photo.name} value={photo.name}>{photo.name}</option>
+                                          ))}
+                                        </select>
+                                    )}
+                                  </td>
+                                </tr>
+                            );
+                          })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between pt-4 flex-none">
+                      <Button variant="outline" onClick={() => setBulkStep(1)} className="border-slate-700 text-white hover:bg-slate-800">이전</Button>
+                      <Button onClick={executeBulkUpload} className="bg-green-600 hover:bg-green-700 text-white shadow-lg">
+                        일괄 등록 완료
+                      </Button>
                     </div>
                   </div>
-
-                  <div className="flex justify-between pt-4">
-                    <Button variant="outline" onClick={() => setBulkStep(1)} className="border-slate-700 text-white hover:bg-slate-800">이전</Button>
-                    <Button onClick={executeBulkUpload} className="bg-green-600 hover:bg-green-700 text-white shadow-lg">
-                      일괄 등록 완료
-                    </Button>
-                  </div>
-                </div>
-            )}
+              )}
+            </div>
           </DialogContent>
         </Dialog>
       </div>
