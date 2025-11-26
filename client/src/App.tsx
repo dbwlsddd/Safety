@@ -307,6 +307,7 @@ export default function App() {
                 onUpdateWorker={handleUpdateWorker}
                 onDeleteWorker={handleDeleteWorker}
                 onBulkUpload={handleBulkUpload}
+                onBulkDelete={handleBulkDelete}
                 onDeleteLog={handleDeleteLog}
                 onSaveConfig={handleSaveConfig}
                 onLogout={handleLogout}
@@ -329,7 +330,6 @@ export default function App() {
                 onBack={() => setCurrentScreen('worker')}
                 onPass={handleInspectionPass}
                 onFail={handleInspectionFail}
-                onBulkDelete={handleBulkDelete}
             />
         )}
       </div>
