@@ -270,6 +270,26 @@ export default function App() {
     setInspectionPassed(false);
   };
 
+  const handleBulkDelete = async (ids: string[]) => {
+    try {
+      const response = await fetch("https://100.64.239.86:9000/api/workers/batch", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(ids),
+      });
+
+      if (response.ok) {
+        // 성공 시 목록 새로고침
+        await fetchWorkers();
+        // toast.success("삭제되었습니다."); // 알림 라이브러리 사용 시
+      } else {
+        console.error("삭제 실패");
+      }
+    } catch (error) {
+      console.error("일괄 삭제 에러:", error);
+    }
+  };
+
   return (
       <div className="size-full">
         {currentScreen === 'mode-selection' && (
@@ -306,6 +326,7 @@ export default function App() {
                 onBack={() => setCurrentScreen('worker')}
                 onPass={handleInspectionPass}
                 onFail={handleInspectionFail}
+                onBulkDelete={handleBulkDelete}
             />
         )}
       </div>

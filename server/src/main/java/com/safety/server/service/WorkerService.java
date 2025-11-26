@@ -82,6 +82,24 @@ public class WorkerService {
         workerRepository.delete(worker);
     }
 
+    @Transactional
+    public void deleteWorkers(List<Long> ids) {
+        // 1. 삭제할 작업자 정보 조회 (이미지 경로를 알기 위해 필요)
+        List<Worker> workers = workerRepository.findAllById(ids);
+
+        if (workers.isEmpty()) {
+            return;
+        }
+
+        // 2. 물리적 파일 삭제
+        for (Worker worker : workers) {
+            deleteFile(worker.getImagePath());
+        }
+
+        // 3. DB 데이터 일괄 삭제
+        workerRepository.deleteAll(workers);
+    }
+
     // [수정됨] 일괄 등록 (Upsert 로직: 존재하면 수정, 없으면 등록)
     @Transactional
     public void bulkRegisterWorkers(List<WorkerRegistrationDto> workerDtos, List<MultipartFile> files) {

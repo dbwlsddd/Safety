@@ -32,6 +32,7 @@ export function AdminDashboard({
                                  onUpdateWorker,
                                  onDeleteWorker,
                                  onBulkUpload,
+                                   onBulkDelete,
                                  onDeleteLog,
                                  onSaveConfig,
                                  onLogout,
@@ -154,6 +155,7 @@ export function AdminDashboard({
                     onUpdateWorker={onUpdateWorker}
                     onDeleteWorker={onDeleteWorker}
                     onBulkUpload={onBulkUpload}
+                    onBulkDelete={onBulkDelete}
                 />
             )}
             {selectedMenu === 'logs' && (

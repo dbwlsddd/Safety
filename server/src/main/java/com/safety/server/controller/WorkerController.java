@@ -9,6 +9,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.List;
 
@@ -91,6 +92,12 @@ public class WorkerController {
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body("삭제 중 오류 발생: " + e.getMessage());
         }
+    }
+
+    @DeleteMapping("/batch")
+    public ResponseEntity<Void> deleteWorkers(@RequestBody List<Long> ids) {
+        workerService.deleteWorkers(ids);
+        return ResponseEntity.noContent().build();
     }
 
     // [기존] 일괄 등록 API

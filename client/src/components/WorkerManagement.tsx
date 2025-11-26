@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Worker } from '../types';
-import { Plus, Upload, Pencil, Trash2, Search, FileSpreadsheet, Image as ImageIcon, Check, AlertCircle } from 'lucide-react';
+import { Plus, Upload, Pencil, Trash2, Search, FileSpreadsheet, Image as ImageIcon, Check, AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Label } from './ui/label';
+import { Checkbox } from './ui/checkbox'; // 🛠️ Checkbox 추가
 import * as XLSX from 'xlsx';
 
 // 🛠️ 타입 정의 확장 (파일 포함)
@@ -18,6 +19,8 @@ interface WorkerManagementProps {
   onUpdateWorker: (id: string, worker: WorkerFormData) => void;
   onDeleteWorker: (id: string) => void;
   onBulkUpload: (workers: any[]) => void;
+  // 🛠️ [추가] 일괄 삭제 핸들러 (상위 컴포넌트에서 구현 필요)
+  onBulkDelete: (ids: string[]) => void;
 }
 
 export function WorkerManagement({
@@ -25,9 +28,13 @@ export function WorkerManagement({
                                    onAddWorker,
                                    onUpdateWorker,
                                    onDeleteWorker,
-                                   onBulkUpload
+                                   onBulkUpload,
+                                   onBulkDelete
                                  }: WorkerManagementProps) {
   const [searchQuery, setSearchQuery] = useState('');
+
+  // 🛠️ [추가] 선택된 ID 관리 상태
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // 모달 상태
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -38,7 +45,6 @@ export function WorkerManagement({
   // 데이터 상태
   const [currentWorker, setCurrentWorker] = useState<Worker | null>(null);
 
-  // 🛠️ photoFile 상태 추가
   const [formData, setFormData] = useState<WorkerFormData>({
     employeeNumber: '',
     name: '',
@@ -46,26 +52,56 @@ export function WorkerManagement({
     photoFile: null
   });
 
-  // 🛠️ 일괄 등록용 상태
-  const [bulkStep, setBulkStep] = useState<1 | 2>(1); // 1: 파일선택, 2: 매칭확인
+  // 일괄 등록용 상태
+  const [bulkStep, setBulkStep] = useState<1 | 2>(1);
   const [excelData, setExcelData] = useState<any[]>([]);
   const [uploadedPhotos, setUploadedPhotos] = useState<File[]>([]);
   const [matchMap, setMatchMap] = useState<{[key: string]: File | null}>({});
 
+  // 검색 필터링
   const filteredWorkers = workers.filter(worker =>
       worker.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       worker.employeeNumber.includes(searchQuery) ||
       worker.team.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // 🛠️ 파일 선택 핸들러
+  // 🛠️ [추가] 체크박스 전체 선택/해제
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredWorkers.length && filteredWorkers.length > 0) {
+      setSelectedIds(new Set()); // 전체 해제
+    } else {
+      const allIds = new Set(filteredWorkers.map(w => w.id));
+      setSelectedIds(allIds); // 전체 선택
+    }
+  };
+
+  // 🛠️ [추가] 개별 체크박스 선택/해제
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  // 🛠️ [추가] 선택 삭제 실행
+  const handleBulkDeleteClick = () => {
+    if (selectedIds.size === 0) return;
+
+    if (window.confirm(`선택한 ${selectedIds.size}명의 작업자를 정말 삭제하시겠습니까?`)) {
+      onBulkDelete(Array.from(selectedIds));
+      setSelectedIds(new Set()); // 선택 초기화
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setFormData(prev => ({ ...prev, photoFile: e.target.files![0] }));
     }
   };
 
-  // 개별 등록
   const handleAdd = () => {
     if (formData.employeeNumber && formData.name && formData.team) {
       onAddWorker(formData);
@@ -74,7 +110,6 @@ export function WorkerManagement({
     }
   };
 
-  // 개별 수정
   const handleEdit = () => {
     if (currentWorker && formData.employeeNumber && formData.name && formData.team) {
       onUpdateWorker(currentWorker.id, formData);
@@ -84,7 +119,6 @@ export function WorkerManagement({
     }
   };
 
-  // 삭제
   const handleDelete = () => {
     if (currentWorker) {
       onDeleteWorker(currentWorker.id);
@@ -99,7 +133,7 @@ export function WorkerManagement({
       employeeNumber: worker.employeeNumber,
       name: worker.name,
       team: worker.team,
-      photoFile: null // 수정 시 파일은 초기화 (새로 올릴 때만 설정)
+      photoFile: null
     });
     setShowEditDialog(true);
   };
@@ -109,7 +143,7 @@ export function WorkerManagement({
     setShowDeleteDialog(true);
   };
 
-  // 🛠️ 엑셀 파일 파싱
+  // 엑셀 핸들러 (기존 유지)
   const handleExcelFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -121,13 +155,11 @@ export function WorkerManagement({
     }
   };
 
-  // 🛠️ 사진 파일 로드 및 자동 매칭
   const handlePhotoFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const files = Array.from(e.target.files);
       setUploadedPhotos(files);
 
-      // 자동 매칭 로직: 이름이 파일명에 포함되면 매칭
       const newMatchMap: {[key: string]: File | null} = {};
       excelData.forEach((row, idx) => {
         const workerName = row['이름'] || row['name'] || '';
@@ -142,24 +174,21 @@ export function WorkerManagement({
     }
   };
 
-  // 🛠️ 사용되지 않은 사진 필터링 (소거법)
   const getUnusedPhotos = () => {
     const usedFiles = new Set(Object.values(matchMap));
     return uploadedPhotos.filter(f => !usedFiles.has(f));
   };
 
-  // 🛠️ 수동 매칭 처리
   const handleManualMatch = (rowIndex: string, file: File) => {
     setMatchMap(prev => ({ ...prev, [rowIndex]: file }));
   };
 
-  // 🛠️ 일괄 등록 실행
   const executeBulkUpload = () => {
     const workersToUpload = excelData.map((row, idx) => ({
       employeeNumber: row['사번'] || row['employeeNumber'] || '',
       name: row['이름'] || row['name'] || row['성명'] || '',
       team: row['소속'] || row['team'] || row['소속팀'] || row['부서'] || row['팀'] || '',
-      photoFile: matchMap[idx] // 파일 객체 포함
+      photoFile: matchMap[idx]
     }));
 
     onBulkUpload(workersToUpload);
@@ -182,17 +211,29 @@ export function WorkerManagement({
         </div>
 
         {/* 컨트롤 영역 */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-6">
-          <div className="relative flex-1">
+        <div className="flex flex-col sm:flex-row gap-3 mb-6 items-center">
+          <div className="relative flex-1 w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
                 placeholder="사번, 이름, 소속팀으로 검색..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-white/10 backdrop-blur-sm border-white/20 text-white placeholder:text-gray-300 font-medium rounded-xl"
+                className="pl-10 bg-white/10 backdrop-blur-sm border-white/20 text-white placeholder:text-gray-300 font-medium rounded-xl w-full"
             />
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-2 w-full sm:w-auto">
+            {/* 🛠️ [추가] 선택 삭제 버튼 (선택된 항목이 있을 때만 표시) */}
+            {selectedIds.size > 0 && (
+                <Button
+                    variant="destructive"
+                    onClick={handleBulkDeleteClick}
+                    className="flex-1 sm:flex-none bg-red-500/80 hover:bg-red-600 text-white shadow-lg rounded-xl font-semibold border border-red-400/50"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  선택 삭제 ({selectedIds.size})
+                </Button>
+            )}
+
             <Button
                 onClick={() => {
                   setFormData({ employeeNumber: '', name: '', team: '', photoFile: null });
@@ -220,7 +261,14 @@ export function WorkerManagement({
             <table className="w-full">
               <thead>
               <tr className="bg-slate-700/30 border-b border-white/10">
-                {/* 🛠️ [추가] 사진 컬럼 헤더 */}
+                {/* 🛠️ [추가] 전체 선택 체크박스 */}
+                <th className="px-6 py-4 w-[50px]">
+                  <Checkbox
+                      checked={filteredWorkers.length > 0 && selectedIds.size === filteredWorkers.length}
+                      onCheckedChange={toggleSelectAll}
+                      className="border-slate-500 data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-500"
+                  />
+                </th>
                 <th className="px-6 py-4 text-left text-sm text-blue-100 font-semibold">사진</th>
                 <th className="px-6 py-4 text-left text-sm text-blue-100 font-semibold">사번</th>
                 <th className="px-6 py-4 text-left text-sm text-blue-100 font-semibold">이름</th>
@@ -230,8 +278,18 @@ export function WorkerManagement({
               </thead>
               <tbody>
               {filteredWorkers.map((worker) => (
-                  <tr key={worker.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                    {/* 🛠️ [수정] Hover Zoom 디자인 적용 */}
+                  <tr
+                      key={worker.id}
+                      className={`border-b border-white/5 transition-colors ${selectedIds.has(worker.id) ? 'bg-blue-500/10' : 'hover:bg-white/5'}`}
+                  >
+                    {/* 🛠️ [추가] 개별 선택 체크박스 */}
+                    <td className="px-6 py-4">
+                      <Checkbox
+                          checked={selectedIds.has(worker.id)}
+                          onCheckedChange={() => toggleSelect(worker.id)}
+                          className="border-slate-500 data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-500"
+                      />
+                    </td>
                     <td className="px-6 py-4 relative group">
                       <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-700 border border-slate-600 transition-all duration-200 ease-out group-hover:scale-[2.5] group-hover:z-50 group-hover:shadow-2xl group-hover:border-blue-400 origin-left">
                         {worker.photoUrl ? (
@@ -240,7 +298,6 @@ export function WorkerManagement({
                                 alt={worker.name}
                                 className="w-full h-full object-cover"
                                 onError={(e) => {
-                                  // 이미지 로드 실패 시 숨김 처리
                                   (e.target as HTMLImageElement).style.display = 'none';
                                 }}
                             />
@@ -272,7 +329,7 @@ export function WorkerManagement({
               ))}
               {filteredWorkers.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-blue-200 font-medium">
+                    <td colSpan={6} className="px-6 py-12 text-center text-blue-200 font-medium">
                       등록된 작업자가 없습니다
                     </td>
                   </tr>
@@ -282,6 +339,7 @@ export function WorkerManagement({
           </div>
         </div>
 
+        {/* ... (이하 다이얼로그 코드는 기존과 동일하게 유지) ... */}
         {/* 신규 등록 다이얼로그 */}
         <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
           <DialogContent className="bg-slate-800/95 backdrop-blur-xl border-slate-700/50 shadow-2xl">
@@ -319,7 +377,6 @@ export function WorkerManagement({
                     className="bg-slate-800 border-slate-700 text-white"
                 />
               </div>
-              {/* 🛠️ 사진 업로드 필드 */}
               <div>
                 <Label className="text-white mb-2 block">작업자 사진 (필수)</Label>
                 <Input
@@ -387,7 +444,6 @@ export function WorkerManagement({
                     className="bg-slate-800 border-slate-700 text-white"
                 />
               </div>
-              {/* 🛠️ 수정용 사진 업로드 필드 */}
               <div>
                 <Label className="text-white mb-2 block">작업자 사진 교체 (선택)</Label>
                 <Input
@@ -460,25 +516,19 @@ export function WorkerManagement({
           </DialogContent>
         </Dialog>
 
-        {/* 엑셀 일괄 등록 다이얼로그 */}
+        {/* 엑셀 일괄 등록 다이얼로그 (기존 코드 유지) */}
         <Dialog open={showBulkUploadDialog} onOpenChange={setShowBulkUploadDialog}>
-          {/* 🛠️ [수정 1] DialogContent에서 overflow-y-auto 제거, flex-col 적용 */}
-          {/* max-h-[90vh]로 모달 전체 높이를 화면의 90%로 제한하고, 내부에서 스크롤 처리 */}
           <DialogContent className="bg-slate-900 border-slate-700 max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
-            <DialogHeader className="flex-none"> {/* flex-none으로 헤더 크기 고정 */}
+            <DialogHeader className="flex-none">
               <DialogTitle className="text-white">엑셀 일괄 등록</DialogTitle>
               <DialogDescription className="text-gray-400">
                 {bulkStep === 1 ? "엑셀 명단과 작업자 사진을 업로드하세요." : "사진 매칭을 확인하세요."}
               </DialogDescription>
             </DialogHeader>
 
-            {/* 🛠️ [수정 2] 컨텐츠 영역을 flex-1로 설정하여 남은 공간 차지 */}
             <div className="flex-1 overflow-y-auto p-1">
-
               {bulkStep === 1 && (
                   <div className="space-y-6 py-4">
-                    {/* ... (기존 업로드 UI 코드 유지) ... */}
-                    {/* 1. 엑셀 업로드 영역 */}
                     <div className="space-y-2">
                       <Label className="text-white">1. 작업자 명단 (엑셀)</Label>
                       <div className="border-2 border-dashed border-slate-700 rounded-xl p-6 text-center hover:border-cyan-500/50 transition-colors">
@@ -498,7 +548,6 @@ export function WorkerManagement({
                       </div>
                     </div>
 
-                    {/* 2. 사진 업로드 영역 */}
                     <div className="space-y-2">
                       <Label className="text-white">2. 작업자 사진 (전체 선택)</Label>
                       <div className="border-2 border-dashed border-slate-700 rounded-xl p-6 text-center hover:border-cyan-500/50 transition-colors">
@@ -532,12 +581,9 @@ export function WorkerManagement({
 
               {bulkStep === 2 && (
                   <div className="space-y-4 py-4 h-full flex flex-col">
-                    {/* 매칭 리스트 테이블 */}
                     <div className="bg-slate-800/50 rounded-lg overflow-hidden border border-slate-700 flex-1 min-h-0 relative flex flex-col">
-                      {/* 🛠️ [수정 3] style 속성을 사용하여 높이와 스크롤을 강제로 적용 */}
                       <div style={{ maxHeight: '50vh', overflowY: 'auto' }} className="custom-scrollbar w-full">
                         <table className="w-full text-sm text-left">
-                          {/* 헤더 고정 */}
                           <thead className="bg-slate-700 text-gray-300 sticky top-0 z-10 shadow-md">
                           <tr>
                             <th className="p-3 font-semibold">이름</th>
@@ -574,7 +620,6 @@ export function WorkerManagement({
                                             }}
                                         >
                                           <option value="">사진 선택...</option>
-                                          {/* 소거법: 아직 선택되지 않은 사진만 표시 */}
                                           {getUnusedPhotos().map(photo => (
                                               <option key={photo.name} value={photo.name}>{photo.name}</option>
                                           ))}
