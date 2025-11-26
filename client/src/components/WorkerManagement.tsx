@@ -527,61 +527,66 @@ export function WorkerManagement({
             {bulkStep === 2 && (
                 <div className="space-y-4 py-4">
                   {/* 매칭 리스트 테이블 */}
-                  <div className="bg-slate-800/50 rounded-lg overflow-hidden">
-                    <table className="w-full text-sm text-left">
-                      <thead className="bg-slate-700/50 text-gray-300">
-                      <tr>
-                        <th className="p-3">이름</th>
-                        <th className="p-3">사번</th>
-                        <th className="p-3">사진 상태</th>
-                        <th className="p-3 text-right">관리</th>
-                      </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-700/50">
-                      {excelData.map((row, idx) => {
-                        const isMatched = !!matchMap[idx];
-                        return (
-                            <tr key={idx} className="hover:bg-slate-700/30">
-                              <td className="p-3 text-white">{row['이름'] || row['name']}</td>
-                              <td className="p-3 text-gray-400">{row['사번'] || row['employeeNumber']}</td>
-                              <td className="p-3">
-                                {isMatched ? (
-                                    <span className="text-green-400 flex items-center gap-1">
-                                                <Check className="w-3 h-3"/> {matchMap[idx]?.name}
-                                            </span>
-                                ) : (
-                                    <span className="text-red-400 flex items-center gap-1">
-                                                <AlertCircle className="w-3 h-3"/> 사진 없음
-                                            </span>
-                                )}
-                              </td>
-                              <td className="p-3 text-right">
-                                {!isMatched && (
-                                    <select
-                                        className="bg-slate-800 border border-slate-600 text-xs text-white rounded p-1"
-                                        onChange={(e) => {
-                                          const file = uploadedPhotos.find(f => f.name === e.target.value);
-                                          if(file) handleManualMatch(idx.toString(), file);
-                                        }}
-                                    >
-                                      <option value="">사진 선택...</option>
-                                      {/* 소거법: 아직 선택되지 않은 사진만 표시 */}
-                                      {getUnusedPhotos().map(photo => (
-                                          <option key={photo.name} value={photo.name}>{photo.name}</option>
-                                      ))}
-                                    </select>
-                                )}
-                              </td>
-                            </tr>
-                        );
-                      })}
-                      </tbody>
-                    </table>
+                  {/* 🛠️ [수정] 테이블 컨테이너에 테두리 추가 및 스타일 보완 */}
+                  <div className="bg-slate-800/50 rounded-lg overflow-hidden border border-slate-700">
+                    {/* 🛠️ [추가] 내부 스크롤 영역 생성 및 최대 높이(max-h-[50vh]) 제한 */}
+                    <div className="max-h-[50vh] overflow-y-auto custom-scrollbar">
+                      <table className="w-full text-sm text-left relative">
+                        {/* 🛠️ [수정] 테이블 헤더 고정 (sticky top-0) */}
+                        <thead className="bg-slate-700 text-gray-300 sticky top-0 z-10 shadow-md">
+                        <tr>
+                          <th className="p-3 font-semibold">이름</th>
+                          <th className="p-3 font-semibold">사번</th>
+                          <th className="p-3 font-semibold">사진 상태</th>
+                          <th className="p-3 text-right font-semibold">관리</th>
+                        </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-700/50">
+                        {excelData.map((row, idx) => {
+                          const isMatched = !!matchMap[idx];
+                          return (
+                              <tr key={idx} className="hover:bg-slate-700/30 transition-colors">
+                                <td className="p-3 text-white">{row['이름'] || row['name']}</td>
+                                <td className="p-3 text-gray-400">{row['사번'] || row['employeeNumber']}</td>
+                                <td className="p-3">
+                                  {isMatched ? (
+                                      <span className="text-green-400 flex items-center gap-1">
+                                                  <Check className="w-3 h-3"/> {matchMap[idx]?.name}
+                                              </span>
+                                  ) : (
+                                      <span className="text-red-400 flex items-center gap-1">
+                                                  <AlertCircle className="w-3 h-3"/> 사진 없음
+                                              </span>
+                                  )}
+                                </td>
+                                <td className="p-3 text-right">
+                                  {!isMatched && (
+                                      <select
+                                          className="bg-slate-800 border border-slate-600 text-xs text-white rounded p-1 cursor-pointer hover:border-blue-500 transition-colors"
+                                          onChange={(e) => {
+                                            const file = uploadedPhotos.find(f => f.name === e.target.value);
+                                            if(file) handleManualMatch(idx.toString(), file);
+                                          }}
+                                      >
+                                        <option value="">사진 선택...</option>
+                                        {/* 소거법: 아직 선택되지 않은 사진만 표시 */}
+                                        {getUnusedPhotos().map(photo => (
+                                            <option key={photo.name} value={photo.name}>{photo.name}</option>
+                                        ))}
+                                      </select>
+                                  )}
+                                </td>
+                              </tr>
+                          );
+                        })}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
 
                   <div className="flex justify-between pt-4">
-                    <Button variant="outline" onClick={() => setBulkStep(1)} className="border-slate-700 text-white">이전</Button>
-                    <Button onClick={executeBulkUpload} className="bg-green-600 hover:bg-green-700 text-white">
+                    <Button variant="outline" onClick={() => setBulkStep(1)} className="border-slate-700 text-white hover:bg-slate-800">이전</Button>
+                    <Button onClick={executeBulkUpload} className="bg-green-600 hover:bg-green-700 text-white shadow-lg">
                       일괄 등록 완료
                     </Button>
                   </div>
