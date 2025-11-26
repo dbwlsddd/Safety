@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Webcam from 'react-webcam';
-import { Worker } from '../types';
-import { LogIn, LogOut, ArrowLeft, UserCheck } from 'lucide-react';
+import { Worker, WorkerStatus } from '../types';
+import { LogIn, LogOut, ArrowLeft, UserCheck, Coffee, DoorOpen } from 'lucide-react';
 import { Button } from './ui/button';
 import { Chatbot } from './Chatbot';
 
@@ -15,23 +15,29 @@ const FRAME_SEND_INTERVAL_MS = 500;
 interface WorkerModeProps {
   workers: Worker[];
   requiredEquipment: string[];
-  checkedInWorkerIds: Set<string>;
+  workerStatusMap: Record<string, WorkerStatus>; // ✅ 변경: 작업자 상태 맵
   onCheckIn: (workerId: string) => void;
   onCheckOut: (workerId: string) => void;
+  onRest: (workerId: string) => void;   // ✅ 추가: 외출 핸들러
+  onReturn: (workerId: string) => void; // ✅ 추가: 복귀 핸들러
   onBack: () => void;
 }
 
 export function WorkerMode({
                              requiredEquipment,
-                             checkedInWorkerIds,
+                             workerStatusMap,
                              onCheckIn,
                              onCheckOut,
+                             onRest,
+                             onReturn,
                              onBack,
                            }: WorkerModeProps) {
-  const [step, setStep] = useState<'face-recognition' | 'equipment-check'>('face-recognition');
+  // 단계: 얼굴인식 -> (분기) -> 장비검사 OR 근무중메뉴
+  const [step, setStep] = useState<'face-recognition' | 'equipment-check' | 'working-menu'>('face-recognition');
+
   const [recognizedWorker, setRecognizedWorker] = useState<Worker | null>(null);
+  const [currentStatus, setCurrentStatus] = useState<WorkerStatus>('OFF_WORK');
   const [detectedEquipment, setDetectedEquipment] = useState<{ [key: string]: boolean }>({});
-  const [isAlreadyCheckedIn, setIsAlreadyCheckedIn] = useState(false);
 
   // 웹캠 관련
   const webcamRef = useRef<Webcam>(null);
@@ -71,7 +77,6 @@ export function WorkerMode({
       console.log("Python AI 서버 연결 성공");
       setRecognitionStatus("얼굴 인식 중...");
 
-      // 검사할 보호구 목록 전송 (영문 변환이 필요할 수 있으나, 일단 그대로 전송)
       const configPayload = {
         type: "CONFIG",
         required: requiredEquipment
@@ -83,9 +88,6 @@ export function WorkerMode({
         if (!webcamRef.current || !websocketRef.current || websocketRef.current.readyState !== WebSocket.OPEN) {
           return;
         }
-
-        // 🛠️ [핵심 수정 1] 얼굴 인식 단계뿐만 아니라 보호구 검사 단계에서도 계속 프레임을 보냄
-        // Python 서버가 매 프레임마다 얼굴+보호구를 같이 보기 때문
         const frameDataUrl = webcamRef.current.getScreenshot();
         if (frameDataUrl) {
           try {
@@ -104,39 +106,41 @@ export function WorkerMode({
         if (message.status === "SUCCESS") {
           const serverWorker = message.worker;
 
-          // 1. 작업자 정보 처리 (아직 인식 안 된 경우)
+          // 1. 얼굴 인식 성공 시 로직 (처음 인식된 경우)
           if (!recognizedWorker) {
+            const workerId = String(serverWorker.worker_id);
+
+            // 현재 상태 조회 (App.tsx에서 전달받은 Map 사용)
+            const status = workerStatusMap[workerId] || 'OFF_WORK';
+
             const worker: Worker = {
-              id: serverWorker.worker_id,
+              id: workerId,
               name: serverWorker.name,
               team: serverWorker.department,
               employeeNumber: serverWorker.employee_number,
             };
             setRecognizedWorker(worker);
+            setCurrentStatus(status);
 
-            const alreadyCheckedIn = checkedInWorkerIds.has(worker.id);
-            setIsAlreadyCheckedIn(alreadyCheckedIn);
-
-            if (alreadyCheckedIn) {
-              setRecognitionStatus("퇴근 대기 중");
-              // 퇴근 모드에서는 보호구 검사 단계로 넘어가지 않고 여기서 대기하거나 바로 처리 가능
+            // 🚀 상태에 따른 화면 분기 처리 (핵심 로직)
+            if (status === 'WORKING') {
+              // 일하는 중 -> 보호구 검사 생략 -> 바로 메뉴(외출/퇴근)로 이동
+              setStep('working-menu');
+              setRecognitionStatus("근무 중입니다.");
             } else {
+              // 퇴근 상태(OFF) 또는 휴식 중(RESTING) -> 보호구 검사 필요 -> 검사 화면으로 이동
               setStep('equipment-check');
-              setRecognitionStatus("보호구 검사 중");
+              setRecognitionStatus(status === 'RESTING' ? "복귀 전 안전 검사" : "출근 전 안전 검사");
             }
           }
 
-          // 🛠️ [핵심 수정 2] 시뮬레이션(Math.random) 제거하고 실제 서버 데이터 반영
-          // recognizedWorker가 있더라도 실시간으로 보호구 상태를 업데이트함
+          // 2. 보호구 감지 결과 업데이트 (실시간)
           if (message.ppe_status && message.ppe_status.detections) {
             const detections = message.ppe_status.detections;
-            // 예: detections = [{ label: "helmet", ... }, { label: "vest", ... }]
             const detectedLabels = new Set(detections.map((d: any) => d.label));
 
             const newDetectedState: { [key: string]: boolean } = {};
             requiredEquipment.forEach(eq => {
-              // 주의: Python YOLO 모델의 label(영어)과 React의 requiredEquipment(한글?)이 일치해야 함
-              // 불일치 시 매핑 로직 필요. 여기서는 문자열이 포함되는지로 느슨하게 체크
               newDetectedState[eq] = Array.from(detectedLabels).some((label: any) =>
                   label.toString().toLowerCase().includes(eq.toLowerCase()) ||
                   eq.toLowerCase().includes(label.toString().toLowerCase())
@@ -146,11 +150,9 @@ export function WorkerMode({
           }
 
         } else if (message.status === "FAILURE") {
-          // 얼굴을 놓쳤을 때
           if (!recognizedWorker) {
             setRecognitionStatus("얼굴을 찾을 수 없습니다.");
           }
-          // 이미 인식된 상태라면(보호구 검사 중) 화면에 경고를 띄우지 않고 기존 상태 유지하거나 무시
         }
 
       } catch (err) {
@@ -172,38 +174,33 @@ export function WorkerMode({
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (websocketRef.current) websocketRef.current.close();
     };
-  }, [isCamReady, recognizedWorker, requiredEquipment, checkedInWorkerIds]); // recognizedWorker가 바뀌어도 연결은 유지되도록 의존성 관리 주의
-
-  // (시뮬레이션 토글 함수 제거 - 실제 감지만 사용)
+  }, [isCamReady, recognizedWorker, requiredEquipment, workerStatusMap]);
 
   // 모든 보호구 착용 확인
   const allEquipmentDetected = requiredEquipment.length > 0 && requiredEquipment.every(eq => detectedEquipment[eq]);
 
-  // 출입 처리
-  const handleCheckInClick = () => {
-    if (recognizedWorker && allEquipmentDetected) {
-      onCheckIn(recognizedWorker.id);
-      setIsAlreadyCheckedIn(true);
-      setTimeout(() => handleReset(), 1000);
-    }
-  };
-
-  // 퇴근 처리
-  const handleCheckOutClick = () => {
-    if (recognizedWorker) {
-      onCheckOut(recognizedWorker.id);
-      setIsAlreadyCheckedIn(false);
-      handleReset();
-    }
-  };
-
-  // 초기화
+  // 초기화 (처음으로 돌아가기)
   const handleReset = () => {
     setStep('face-recognition');
     setRecognizedWorker(null);
     setDetectedEquipment({});
-    setIsAlreadyCheckedIn(false);
+    setCurrentStatus('OFF_WORK');
     setRecognitionStatus("얼굴 인식 중...");
+  };
+
+  // 버튼 액션 핸들러 통합
+  const handleAction = (action: 'CHECK_IN' | 'CHECK_OUT' | 'REST' | 'RETURN') => {
+    if (!recognizedWorker) return;
+
+    switch (action) {
+      case 'CHECK_IN': onCheckIn(recognizedWorker.id); break;
+      case 'CHECK_OUT': onCheckOut(recognizedWorker.id); break;
+      case 'REST': onRest(recognizedWorker.id); break;
+      case 'RETURN': onReturn(recognizedWorker.id); break;
+    }
+
+    // 액션 후 잠시 대기했다가 초기화 (UX)
+    setTimeout(() => handleReset(), 1000);
   };
 
   return (
@@ -248,58 +245,85 @@ export function WorkerMode({
 
             {/* 상태 메시지 하단 오버레이 */}
             <div className="absolute bottom-6 bg-slate-900/80 px-6 py-2 rounded-full border border-cyan-500/30 z-20">
-              <p className="text-cyan-400 font-semibold">
-                {step === 'face-recognition' ? recognitionStatus : "보호구 착용 상태 확인 중..."}
-              </p>
+              <p className="text-cyan-400 font-semibold">{recognitionStatus}</p>
             </div>
           </div>
 
           {/* 우측 정보 패널 */}
           <div className="lg:w-1/4 flex flex-col gap-4">
-            <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 flex-1">
+            <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 flex-1 flex flex-col">
               <h2 className="text-white text-2xl font-bold mb-4">
-                {step === 'face-recognition' ? '1단계: 얼굴 인식' : '2단계: 안전 검사'}
+                {step === 'face-recognition' ? '1단계: 얼굴 인식' :
+                    step === 'equipment-check' ? '2단계: 안전 검사' : '작업자 메뉴'}
               </h2>
 
               {recognizedWorker ? (
                   <div className="mb-6 p-4 bg-cyan-900/20 border border-cyan-500/30 rounded-xl">
                     <p className="text-cyan-400 font-bold text-lg">{recognizedWorker.name} 님</p>
                     <p className="text-gray-400 text-sm">{recognizedWorker.team} / {recognizedWorker.employeeNumber}</p>
+                    <div className="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      {currentStatus === 'WORKING' ? '근무 중' :
+                          currentStatus === 'RESTING' ? '휴식/외출 중' : '퇴근 상태'}
+                    </div>
                   </div>
               ) : (
                   <p className="text-gray-400 mb-6">카메라 정면을 응시해주세요.</p>
               )}
 
-              {/* 보호구 리스트 (실시간 상태 반영) */}
+              {/* [CASE A] 보호구 검사 화면 (퇴근 상태 or 휴식 중일 때) */}
               {step === 'equipment-check' && (
-                  <div className="space-y-2">
-                    {requiredEquipment.map(eq => (
-                        <div key={eq} className={`flex items-center justify-between p-3 rounded-lg border ${
-                            detectedEquipment[eq]
-                                ? 'bg-green-500/20 border-green-500 text-green-400'
-                                : 'bg-red-500/20 border-red-500 text-red-400'
-                        }`}>
-                          <span className="font-medium">{eq}</span>
-                          {detectedEquipment[eq] ? <UserCheck className="w-5 h-5"/> : <span className="text-xs font-bold">미착용</span>}
-                        </div>
-                    ))}
+                  <div className="flex-1 flex flex-col">
+                    <div className="space-y-2 mb-6 flex-1">
+                      {requiredEquipment.map(eq => (
+                          <div key={eq} className={`flex items-center justify-between p-3 rounded-lg border ${
+                              detectedEquipment[eq]
+                                  ? 'bg-green-500/20 border-green-500 text-green-400'
+                                  : 'bg-red-500/20 border-red-500 text-red-400'
+                          }`}>
+                            <span className="font-medium">{eq}</span>
+                            {detectedEquipment[eq] ? <UserCheck className="w-5 h-5"/> : <span className="text-xs font-bold">미착용</span>}
+                          </div>
+                      ))}
+                    </div>
+                    {/* 버튼: 상태에 따라 출근 또는 복귀 */}
+                    <Button
+                        onClick={() => handleAction(currentStatus === 'RESTING' ? 'RETURN' : 'CHECK_IN')}
+                        disabled={!allEquipmentDetected}
+                        className={`h-16 text-lg font-bold w-full ${allEquipmentDetected ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-800'}`}
+                    >
+                      {allEquipmentDetected
+                          ? (currentStatus === 'RESTING' ? <><LogIn className="mr-2"/> 업무 복귀</> : <><LogIn className="mr-2"/> 출입 허용</>)
+                          : "보호구 미착용"}
+                    </Button>
+                  </div>
+              )}
+
+              {/* [CASE B] 근무 중 메뉴 (이미 출근한 상태) */}
+              {step === 'working-menu' && (
+                  <div className="flex-1 flex flex-col gap-3 justify-center">
+                    <p className="text-blue-200 text-center mb-4 font-medium">
+                      안전하게 작업 중이시군요!<br/>원하시는 작업을 선택하세요.
+                    </p>
+
+                    <Button
+                        onClick={() => handleAction('REST')}
+                        className="h-14 bg-yellow-600 hover:bg-yellow-700 text-white font-bold text-lg rounded-xl shadow-lg transition-all hover:scale-105"
+                    >
+                      <Coffee className="mr-2 w-6 h-6" /> 외출 / 휴식
+                    </Button>
+
+                    <Button
+                        onClick={() => handleAction('CHECK_OUT')}
+                        className="h-14 bg-red-600 hover:bg-red-700 text-white font-bold text-lg rounded-xl shadow-lg transition-all hover:scale-105"
+                    >
+                      <DoorOpen className="mr-2 w-6 h-6" /> 퇴근 하기
+                    </Button>
                   </div>
               )}
             </div>
 
-            {/* 버튼 영역 */}
-            {step === 'equipment-check' && (
-                <Button
-                    onClick={handleCheckInClick}
-                    disabled={!allEquipmentDetected}
-                    className={`h-16 text-lg font-bold ${allEquipmentDetected ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-800'}`}
-                >
-                  {allEquipmentDetected ? <><LogIn className="mr-2"/> 출입 허용</> : "보호구 미착용"}
-                </Button>
-            )}
-
             {/* 리셋 버튼 */}
-            <Button onClick={handleReset} variant="ghost" className="text-gray-500 hover:text-white">
+            <Button onClick={handleReset} variant="ghost" className="text-gray-500 hover:text-white h-12">
               처음으로 돌아가기
             </Button>
           </div>

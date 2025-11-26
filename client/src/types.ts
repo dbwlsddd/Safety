@@ -10,6 +10,8 @@ export type Equipment =
   | '작업화'
   | '하네스';
 
+export type WorkerStatus = 'WORKING' | 'RESTING' | 'OFF_WORK';
+
 export interface Worker {
   id: string;
   employeeNumber: string;
@@ -22,7 +24,7 @@ export interface AccessLogEntry {
   id: string;
   timestamp: Date;
   workerName: string;
-  activity: '출입' | '퇴근' | '검사';
+  activity: '출입' | '퇴근' | '검사' | '외출' | '복귀';
   status: '성공' | '실패' | '경고';
   details: string;
 }

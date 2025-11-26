@@ -3,7 +3,7 @@ import { ModeSelection } from './components/ModeSelection';
 import { AdminDashboard } from './components/AdminDashboard';
 import { WorkerMode } from './components/WorkerMode';
 import { InspectionScreen } from './components/InspectionScreen';
-import { Worker, AccessLogEntry, SystemConfig } from './types';
+import { Worker, AccessLogEntry, SystemConfig, WorkerStatus } from './types'; // ✅ 타입 추가
 import { WorkerFormData } from './components/WorkerManagement';
 
 type Screen = 'mode-selection' | 'admin' | 'worker' | 'inspection';
@@ -27,7 +27,10 @@ export default function App() {
   const [config, setConfig] = useState<SystemConfig>(defaultConfig);
   const [inspectionPassed, setInspectionPassed] = useState(false);
   const [currentWorkerId, setCurrentWorkerId] = useState<string | null>(null);
-  const [checkedInWorkerIds, setCheckedInWorkerIds] = useState<Set<string>>(new Set());
+
+  // 🛠️ [핵심 변경] 작업자 ID별 상태 관리 (Working/Resting/Off)
+  // 예: { "1": "WORKING", "2": "RESTING" }
+  const [workerStatusMap, setWorkerStatusMap] = useState<Record<string, WorkerStatus>>({});
 
   // 앱 시작 시 서버에서 데이터 가져오기
   useEffect(() => {
@@ -40,10 +43,9 @@ export default function App() {
       if (response.ok) {
         const data = await response.json();
         const mappedWorkers: Worker[] = data.map((w: any) => {
-          // 🛠️ DB 이미지 경로(../images/...)를 웹 URL(/images/...)로 변환
+          // 🛠️ DB 이미지 경로 변환
           let photoUrl = null;
           if (w.imagePath) {
-            // "../images/"를 제거하고 "/images/"로 맞춤
             const cleanPath = w.imagePath.replace("../images/", "images/");
             photoUrl = `${SERVER_URL}/${cleanPath}`;
           }
@@ -53,7 +55,7 @@ export default function App() {
             name: w.name,
             employeeNumber: w.employeeNumber,
             team: w.department || w.team || '미지정',
-            photoUrl: photoUrl, // 변환된 URL 저장
+            photoUrl: photoUrl,
           };
         });
         setWorkers(mappedWorkers);
@@ -80,7 +82,7 @@ export default function App() {
     try {
       const response = await fetch(`${API_BASE_URL}/workers`, {
         method: "POST",
-        body: formData, // Content-Type 헤더는 fetch가 자동 설정 (multipart/form-data)
+        body: formData,
       });
 
       if (response.ok) {
@@ -103,7 +105,6 @@ export default function App() {
     formData.append("name", workerData.name);
     formData.append("team", workerData.team);
 
-    // 파일이 있는 경우에만 추가 (파일 없으면 백엔드에서 기존 사진 유지)
     if (workerData.photoFile) {
       formData.append("photoFile", workerData.photoFile);
     }
@@ -148,7 +149,7 @@ export default function App() {
     }
   };
 
-  // 🛠️ [수정됨] 일괄 등록 후 목록 자동 갱신
+  // 🛠️ 일괄 등록
   const handleBulkUpload = async (newWorkers: any[]) => {
     const formData = new FormData();
     const dtos = [];
@@ -173,7 +174,6 @@ export default function App() {
       });
       if (response.ok) {
         alert("일괄 등록 완료");
-        // 👇 등록 완료 후 목록을 다시 불러옵니다 (자동 새로고침 효과)
         await fetchWorkers();
       } else {
         alert("등록 실패");
@@ -181,6 +181,28 @@ export default function App() {
     } catch (error) {
       console.error("업로드 오류:", error);
       alert("통신 오류");
+    }
+  };
+
+  // 🛠️ 일괄 삭제 (POST /batch-delete) - 405 에러 해결을 위해 POST 사용
+  const handleBulkDelete = async (ids: string[]) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/workers/batch-delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(ids),
+      });
+
+      if (response.ok) {
+        await fetchWorkers();
+        alert("선택한 작업자가 삭제되었습니다.");
+      } else {
+        console.error("삭제 실패");
+        alert("삭제에 실패했습니다.");
+      }
+    } catch (error) {
+      console.error("일괄 삭제 에러:", error);
+      alert("서버 통신 오류가 발생했습니다.");
     }
   };
 
@@ -214,16 +236,77 @@ export default function App() {
     setCurrentScreen('mode-selection');
   };
 
+  // ============================================================
+  // ✅ 상태 기반 워크플로우 핸들러
+  // ============================================================
+
+  // 1. 출근 (OFF -> WORKING)
+  const handleCheckIn = (workerId: string) => {
+    const worker = workers.find(w => w.id === workerId);
+    if (worker) {
+      setWorkerStatusMap(prev => ({ ...prev, [workerId]: 'WORKING' }));
+      addLog({
+        workerName: worker.name,
+        activity: '출입',
+        status: '성공',
+        details: '작업장 입장 (근무 시작)'
+      });
+    }
+  };
+
+  // 2. 퇴근 (WORKING -> OFF)
+  const handleCheckOut = (workerId: string) => {
+    const worker = workers.find(w => w.id === workerId);
+    if (worker) {
+      setWorkerStatusMap(prev => {
+        const newMap = { ...prev };
+        delete newMap[workerId];
+        return newMap;
+      });
+      addLog({
+        workerName: worker.name,
+        activity: '퇴근',
+        status: '성공',
+        details: '작업 종료'
+      });
+    }
+    setInspectionPassed(false);
+  };
+
+  // 3. 외출/휴식 (WORKING -> RESTING)
+  const handleRest = (workerId: string) => {
+    const worker = workers.find(w => w.id === workerId);
+    if (worker) {
+      setWorkerStatusMap(prev => ({ ...prev, [workerId]: 'RESTING' }));
+      addLog({
+        workerName: worker.name,
+        activity: '외출',
+        status: '성공',
+        details: '잠시 외출/휴식'
+      });
+    }
+  };
+
+  // 4. 복귀 (RESTING -> WORKING)
+  const handleReturn = (workerId: string) => {
+    const worker = workers.find(w => w.id === workerId);
+    if (worker) {
+      setWorkerStatusMap(prev => ({ ...prev, [workerId]: 'WORKING' }));
+      addLog({
+        workerName: worker.name,
+        activity: '복귀',
+        status: '성공',
+        details: '휴식 후 복귀'
+      });
+    }
+  };
+
+  // (구) 검사 화면용 - WorkerMode 사용 시에는 크게 쓰이지 않을 수 있음
   const handleInspectionPass = () => {
     setInspectionPassed(true);
     const worker = workers.find(w => w.id === currentWorkerId);
     if (worker) {
-      addLog({
-        workerName: worker.name,
-        activity: '검사',
-        status: '성공',
-        details: '보호구 착용 확인',
-      });
+      addLog({ workerName: worker.name, activity: '검사', status: '성공', details: '보호구 착용 확인' });
     }
     setCurrentScreen('worker');
   };
@@ -231,66 +314,9 @@ export default function App() {
   const handleInspectionFail = () => {
     const worker = workers.find(w => w.id === currentWorkerId);
     if (worker) {
-      addLog({
-        workerName: worker.name,
-        activity: '검사',
-        status: '실패',
-        details: '보호구 미착용',
-      });
+      addLog({ workerName: worker.name, activity: '검사', status: '실패', details: '보호구 미착용' });
     }
     setCurrentScreen('worker');
-  };
-
-  const handleCheckIn = (workerId: string) => {
-    const worker = workers.find(w => w.id === workerId);
-    if (worker) {
-      addLog({
-        workerName: worker.name,
-        activity: '출입',
-        status: '성공',
-        details: '입장',
-      });
-      setCheckedInWorkerIds(prev => new Set(prev).add(workerId));
-    }
-  };
-
-  const handleCheckOut = (workerId: string) => {
-    const worker = workers.find(w => w.id === workerId);
-    if (worker) {
-      addLog({
-        workerName: worker.name,
-        activity: '퇴근',
-        status: '성공',
-        details: '퇴근',
-      });
-      const newSet = new Set(checkedInWorkerIds);
-      newSet.delete(workerId);
-      setCheckedInWorkerIds(newSet);
-    }
-    setInspectionPassed(false);
-  };
-
-  const handleBulkDelete = async (ids: string[]) => {
-    try {
-      // 🛠️ [수정] DELETE -> POST로 변경하고, 주소도 '/workers/batch-delete'로 수정
-      const response = await fetch(`${API_BASE_URL}/workers/batch-delete`, {
-        method: "POST", // method 변경
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(ids),
-      });
-
-      if (response.ok) {
-        // 성공 시 목록 새로고침
-        await fetchWorkers();
-        alert("선택한 작업자가 삭제되었습니다.");
-      } else {
-        console.error("삭제 실패");
-        alert("삭제에 실패했습니다.");
-      }
-    } catch (error) {
-      console.error("일괄 삭제 에러:", error);
-      alert("서버 통신 오류가 발생했습니다.");
-    }
   };
 
   return (
@@ -307,7 +333,7 @@ export default function App() {
                 onUpdateWorker={handleUpdateWorker}
                 onDeleteWorker={handleDeleteWorker}
                 onBulkUpload={handleBulkUpload}
-                onBulkDelete={handleBulkDelete}
+                onBulkDelete={handleBulkDelete} // ✅ 일괄 삭제 핸들러 전달
                 onDeleteLog={handleDeleteLog}
                 onSaveConfig={handleSaveConfig}
                 onLogout={handleLogout}
@@ -317,9 +343,11 @@ export default function App() {
             <WorkerMode
                 workers={workers}
                 requiredEquipment={config.requiredEquipment}
-                checkedInWorkerIds={checkedInWorkerIds}
+                workerStatusMap={workerStatusMap} // ✅ 상태 맵 전달
                 onCheckIn={handleCheckIn}
                 onCheckOut={handleCheckOut}
+                onRest={handleRest}     // ✅ 외출 핸들러
+                onReturn={handleReturn} // ✅ 복귀 핸들러
                 onBack={handleLogout}
             />
         )}
