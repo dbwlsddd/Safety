@@ -148,37 +148,31 @@ export default function App() {
     }
   };
 
-  const handleBulkUpload = async (newWorkers: any[]) => {
-    const formData = new FormData();
-    const dtos = [];
-
-    for (const w of newWorkers) {
-      dtos.push({
-        name: w.name,
-        employeeNumber: w.employeeNumber,
-        team: w.team,
-        mappedFileName: w.photoFile ? w.photoFile.name : null
-      });
-      if (w.photoFile) {
-        formData.append("files", w.photoFile);
-      }
-    }
-    formData.append("data", JSON.stringify(dtos));
-
+  const handleBulkUpload = async (workersData: any[]) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/workers/bulk`, {
-        method: "POST",
-        body: formData,
+      // 1. 서버로 일괄 등록 요청 보내기
+      const formData = new FormData();
+      formData.append('data', JSON.stringify(workersData.map(w => ({
+        employeeNumber: w.employeeNumber,
+        name: w.name,
+        team: w.team
+      }))));
+
+      workersData.forEach(w => {
+        if (w.photoFile) {
+          formData.append('files', w.photoFile);
+        }
       });
-      if (response.ok) {
-        alert("일괄 등록 완료");
-        fetchWorkers();
-      } else {
-        alert("등록 실패");
-      }
+
+      await api.post('/api/workers/bulk', formData); // API 호출
+
+      // 👇 [핵심] 등록 성공 후, 목록을 다시 불러와야 화면이 갱신됩니다!
+      await fetchWorkers();
+
+      alert('일괄 등록이 완료되었습니다.'); // 사용자 알림
     } catch (error) {
-      console.error("업로드 오류:", error);
-      alert("통신 오류");
+      console.error('Upload failed:', error);
+      alert('일괄 등록 실패');
     }
   };
 
