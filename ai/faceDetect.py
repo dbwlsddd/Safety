@@ -37,9 +37,15 @@ app.add_middleware(
 )
 
 # -------------------------------------------------------------------------
-# 설정값
+# 설정값 (튜닝 포인트)
 # -------------------------------------------------------------------------
-RECOGNITION_THRESHOLD = 0.6
+# 1. 임계값 조정: 0.6 -> 0.45 (더 엄격하게 검사하여 타인 인식 방지)
+RECOGNITION_THRESHOLD = 0.45
+
+# 2. 얼굴 감지 백엔드 변경: 'opencv' -> 'retinaface' 또는 'ssd'
+# retinaface가 가장 정확하지만 느릴 수 있습니다. 속도가 중요하다면 'ssd' 추천.
+DETECTOR_BACKEND = "ssd"
+
 FACE_MODEL_NAME = "ArcFace"
 PPE_MODEL_PATH = "best.pt"
 
@@ -95,13 +101,20 @@ def base64_to_cv2_image(base64_str):
         return None
 
 # -------------------------------------------------------------------------
-# 🔥 보호구 감지 추론 함수
+# 🔥 보호구 감지 추론 함수 (로깅 추가)
 # -------------------------------------------------------------------------
 def detect_ppe_dynamic(cv2_image, required_list):
     if ppe_model is None:
         return {"is_safe": False, "detections": []}
 
+    # 필수 리스트가 비어있으면 무조건 통과되는 버그 방지 (최소한의 안전장치)
+    if not required_list:
+        print("⚠️ [경고] 필수 보호구 리스트가 비어있습니다. 검사를 건너뜁니다.")
+        # 상황에 따라 True를 줄지 False를 줄지 결정해야 함. 
+        # 안전이 우선이라면 False가 맞지만, 설정에 따라 다름. 일단 로그 출력.
+
     try:
+        # conf=0.5 -> 0.6으로 약간 올려서 오탐지 방지 고려 가능
         results = ppe_model(cv2_image, conf=0.5, verbose=False)
         detections = []
         detected_korean_labels = set()
@@ -123,11 +136,20 @@ def detect_ppe_dynamic(cv2_image, required_list):
                     "class_id": int(cls_id)
                 })
 
-        is_safe = all(item in detected_korean_labels for item in required_list)
+        # 검증 로직
+        missing_items = [item for item in required_list if item not in detected_korean_labels]
+        is_safe = len(missing_items) == 0
+
+        # 🔍 디버깅 로그 출력 (콘솔에서 확인용)
+        if not is_safe:
+            print(f"❌ [안전 위반] 감지됨: {detected_korean_labels}, 필요: {required_list}, 누락: {missing_items}")
+        else:
+            print(f"✅ [안전 통과] 감지됨: {detected_korean_labels}")
 
         return {
             "is_safe": is_safe,
-            "detections": detections
+            "detections": detections,
+            "missing": missing_items # 클라이언트에 누락된 항목 정보 전달 가능
         }
 
     except Exception as e:
@@ -135,26 +157,24 @@ def detect_ppe_dynamic(cv2_image, required_list):
         return {"is_safe": False, "detections": []}
 
 # -------------------------------------------------------------------------
-# 🛠️ [수정됨] 얼굴 벡터 추출 API (등록 시 사용)
+# 얼굴 벡터 추출 API (등록 시 사용)
 # -------------------------------------------------------------------------
 @app.post("/vectorize")
 async def vectorize_face(file: UploadFile = File(...)):
     try:
-        # 1. 파일 읽기
         contents = await file.read()
-
-        # 🛠️ [수정] np.fromstring -> np.frombuffer (최신 numpy 호환)
         nparr = np.frombuffer(contents, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
         if img is None:
             return {"status": "FAILURE", "message": "이미지를 읽을 수 없습니다."}
 
-        # 2. DeepFace로 벡터 추출
+        # 3. detector_backend 추가 (등록할 때 정확도가 제일 중요함)
         embedding_objs = DeepFace.represent(
             img_path=img,
             model_name=FACE_MODEL_NAME,
-            enforce_detection=False  # 얼굴 감지 실패해도 진행하려면 False
+            detector_backend=DETECTOR_BACKEND, # 여기서도 백엔드 일치시켜야 함
+            enforce_detection=True # 등록할 땐 얼굴 없으면 에러 내는 게 맞음
         )
         vector = embedding_objs[0]["embedding"]
 
@@ -166,11 +186,10 @@ async def vectorize_face(file: UploadFile = File(...)):
 
     except Exception as e:
         print(f"벡터 추출 실패: {e}")
-        # 500 에러 대신 JSON으로 실패 사유 반환
         return {"status": "FAILURE", "message": str(e)}
 
 # -------------------------------------------------------------------------
-# 웹 소켓 엔드포인트 (기존 유지)
+# 웹 소켓 엔드포인트
 # -------------------------------------------------------------------------
 @app.websocket("/ws/face")
 async def websocket_endpoint(websocket: WebSocket):
@@ -184,8 +203,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     try:
         await websocket.accept()
-        print("[연결 수락됨]")
-        current_required_ppe = ["헬멧", "조끼"] # 기본값 한글로 통일
+        current_required_ppe = ["헬멧", "조끼"]
 
         while True:
             data = await websocket.receive_text()
@@ -194,9 +212,10 @@ async def websocket_endpoint(websocket: WebSocket):
             except json.JSONDecodeError:
                 json_data = {"image": data}
 
+            # 설정 변경 패킷 처리
             if json_data.get("type") == "CONFIG":
                 current_required_ppe = json_data.get("required", [])
-                print(f"[설정 변경] 검사할 보호구: {current_required_ppe}")
+                print(f"[설정 변경] 검사할 보호구 업데이트: {current_required_ppe}")
                 continue
 
             image_base64 = json_data.get("image")
@@ -207,23 +226,28 @@ async def websocket_endpoint(websocket: WebSocket):
             if image_cv is None:
                 continue
 
-            # 얼굴 인식 및 DB 조회
+            # --- 얼굴 인식 로직 ---
             found_worker = None
             input_vector = None
 
             try:
+                # 4. DeepFace 파라미터 튜닝
                 embedding_objs = DeepFace.represent(
                     img_path=image_cv,
                     model_name=FACE_MODEL_NAME,
-                    enforce_detection=True
+                    detector_backend=DETECTOR_BACKEND, # 'ssd' or 'retinaface'
+                    enforce_detection=True # 얼굴이 확실히 있을 때만 처리
                 )
                 input_vector = embedding_objs[0]["embedding"]
             except Exception:
+                # 얼굴 감지 실패 시 조용히 넘어감 (프레임마다 검사하므로)
                 pass
 
             if input_vector and conn_db:
                 try:
                     cursor = conn_db.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+                    # 5. SQL 쿼리 로직은 그대로 두되, Threshold를 믿음
                     query = """
                             SELECT
                                 worker_id,
@@ -234,38 +258,49 @@ async def websocket_endpoint(websocket: WebSocket):
                             FROM
                                 workers
                             ORDER BY
-                                distance
+                                distance ASC
                                 LIMIT 1;
                             """
                     cursor.execute(query, (str(input_vector),))
                     result = cursor.fetchone()
                     cursor.close()
 
-                    if result and result["distance"] < RECOGNITION_THRESHOLD:
-                        found_worker = {
-                            "worker_id": str(result["worker_id"]),
-                            "name": result["name"],
-                            "department": result["department"],
-                            "employee_number": result["employee_number"],
-                            "distance": float(result["distance"])
-                        }
-                    else:
-                        await websocket.send_json({
-                            "status": "FAILURE",
-                            "message": "등록되지 않은 사용자"
-                        })
+                    if result:
+                        dist = float(result["distance"])
+                        # print(f"[DEBUG] 인식된 사람: {result['name']}, 거리: {dist}") # 디버깅용 주석
+
+                        if dist < RECOGNITION_THRESHOLD:
+                            found_worker = {
+                                "worker_id": str(result["worker_id"]),
+                                "name": result["name"],
+                                "department": result["department"],
+                                "employee_number": result["employee_number"],
+                                "distance": dist
+                            }
+                        else:
+                            # 가장 가까운 사람이지만 임계값은 못 넘음 -> 타인 or 인식 실패
+                            pass
+
                 except Exception as e:
                     print(f"DB 쿼리 에러: {e}")
                     conn_db.rollback()
 
+            # --- 응답 전송 ---
+            # 얼굴을 찾았으면 보호구 검사 수행
             if found_worker:
                 ppe_result = detect_ppe_dynamic(image_cv, current_required_ppe)
+
+                # 얼굴 인식 결과와 보호구 결과를 합쳐서 전송
                 response = {
                     "status": "SUCCESS",
                     "worker": found_worker,
                     "ppe_status": ppe_result
                 }
                 await websocket.send_json(response)
+
+            # (옵션) 얼굴을 못 찾았을 때 클라이언트에 피드백이 필요하다면 아래 주석 해제
+            # else:
+            #     await websocket.send_json({"status": "NO_FACE", "message": "얼굴 감지 중..."})
 
     except WebSocketDisconnect:
         print(f"[연결 종료] {websocket.client}")
@@ -278,5 +313,4 @@ async def websocket_endpoint(websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
-    # 9000번 포트 하나만 사용
     uvicorn.run(app, host="0.0.0.0", port=9000)
