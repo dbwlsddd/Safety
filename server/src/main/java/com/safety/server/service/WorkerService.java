@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -48,25 +49,8 @@ public class WorkerService {
             throw new IllegalArgumentException("작업자 사진은 필수입니다.");
         }
 
-        // 1. 파일 저장 (물리적 파일 생성)
-        String newFileName = saveFile(photoFile, dto.getEmployeeNumber());
-
-        // 🛠️ [수정됨] DB에는 '웹 접근 경로' 또는 '파일명'만 저장하는 것이 좋습니다.
-        // 여기서는 파일 시스템 경로를 저장하지만, 프론트엔드에서 이미지를 불러오려면
-        // WebMvcConfig에서 리소스 매핑이 필요합니다. (아래 팁 참고)
-        String savedFilePath = UPLOAD_DIR + newFileName;
-
-        // 2. AI 벡터 추출
-        List<Double> vectorList = aiProcessingService.extractFaceVector(photoFile);
-
-        // 3. DB 저장
-        workerRepository.saveWorkerWithVector(
-                dto.getName(),
-                dto.getEmployeeNumber(),
-                dto.getTeam(),
-                savedFilePath,
-                vectorList.toString()
-        );
+        // 공통 등록 로직 호출
+        processRegisterWithFile(dto, photoFile);
     }
 
     // [신규] 작업자 정보 수정
@@ -77,22 +61,10 @@ public class WorkerService {
 
         // 사진 변경이 있는 경우
         if (photoFile != null && !photoFile.isEmpty()) {
-            deleteFile(worker.getImagePath()); // 기존 파일 삭제
-
-            String newFileName = saveFile(photoFile, dto.getEmployeeNumber());
-            String savedFilePath = UPLOAD_DIR + newFileName;
-            List<Double> vectorList = aiProcessingService.extractFaceVector(photoFile);
-
-            workerRepository.updateWorkerWithVector(
-                    id,
-                    dto.getName(),
-                    dto.getEmployeeNumber(),
-                    dto.getTeam(),
-                    savedFilePath,
-                    vectorList.toString()
-            );
+            // 공통 수정 로직 호출 (파일 포함)
+            processUpdateWithFile(worker, dto, photoFile);
         } else {
-            // 사진 변경 없음: 정보만 업데이트 (JPA Dirty Checking 또는 명시적 저장)
+            // 사진 변경 없음: 정보만 업데이트 (JPA Dirty Checking)
             worker.setName(dto.getName());
             worker.setEmployeeNumber(dto.getEmployeeNumber());
             worker.setDepartment(dto.getTeam());
@@ -110,9 +82,10 @@ public class WorkerService {
         workerRepository.delete(worker);
     }
 
-    // 일괄 등록
+    // [수정됨] 일괄 등록 (Upsert 로직: 존재하면 수정, 없으면 등록)
     @Transactional
     public void bulkRegisterWorkers(List<WorkerRegistrationDto> workerDtos, List<MultipartFile> files) {
+        // 파일 이름으로 MultipartFile 매핑
         Map<String, MultipartFile> fileMap = files.stream()
                 .collect(Collectors.toMap(MultipartFile::getOriginalFilename, Function.identity()));
 
@@ -125,15 +98,89 @@ public class WorkerService {
         for (WorkerRegistrationDto dto : workerDtos) {
             try {
                 MultipartFile file = fileMap.get(dto.getMappedFileName());
-                if (file != null) {
-                    registerWorker(dto, file);
+                String empNum = dto.getEmployeeNumber();
+
+                // 1. 사번으로 기존 작업자 조회 (Repository에 findByEmployeeNumber 필요)
+                Optional<Worker> existingWorkerOpt = workerRepository.findByEmployeeNumber(empNum);
+
+                if (existingWorkerOpt.isPresent()) {
+                    // [CASE 1] 이미 존재함 -> 정보 수정 (Update)
+                    Worker existingWorker = existingWorkerOpt.get();
+
+                    if (file != null) {
+                        // 파일이 있으면: 사진 + 정보 업데이트
+                        processUpdateWithFile(existingWorker, dto, file);
+                    } else {
+                        // 파일이 없으면: 이름/부서만 변경
+                        existingWorker.setName(dto.getName());
+                        existingWorker.setDepartment(dto.getTeam());
+                        workerRepository.save(existingWorker);
+                    }
+
                 } else {
-                    System.err.println("사진 누락: " + dto.getName());
+                    // [CASE 2] 존재하지 않음 -> 신규 등록 (Insert)
+                    if (file != null) {
+                        processRegisterWithFile(dto, file);
+                    } else {
+                        System.err.println("사진 누락으로 등록 실패: " + dto.getName());
+                    }
                 }
+
             } catch (Exception e) {
-                System.err.println("일괄 등록 실패 (" + dto.getName() + "): " + e.getMessage());
+                System.err.println("일괄 처리 실패 (" + dto.getName() + "): " + e.getMessage());
+                e.printStackTrace();
             }
         }
+    }
+
+    // =================================================================================
+    // 내부 헬퍼 메서드 (코드 중복 방지)
+    // =================================================================================
+
+    /**
+     * 신규 등록 처리를 수행하는 내부 메서드 (파일 저장 -> 벡터 추출 -> DB 저장)
+     */
+    private void processRegisterWithFile(WorkerRegistrationDto dto, MultipartFile photoFile) throws IOException {
+        // 1. 파일 저장 (물리적 파일 생성)
+        String newFileName = saveFile(photoFile, dto.getEmployeeNumber());
+
+        // 🛠️ [수정됨] DB에는 '웹 접근 경로' 또는 '파일명'만 저장
+        String savedFilePath = UPLOAD_DIR + newFileName;
+
+        // 2. AI 벡터 추출
+        List<Double> vectorList = aiProcessingService.extractFaceVector(photoFile);
+
+        // 3. DB 저장 (네이티브 쿼리 사용)
+        workerRepository.saveWorkerWithVector(
+                dto.getName(),
+                dto.getEmployeeNumber(),
+                dto.getTeam(),
+                savedFilePath,
+                vectorList.toString()
+        );
+    }
+
+    /**
+     * 수정 처리를 수행하는 내부 메서드 (기존 파일 삭제 -> 새 파일 저장 -> 벡터 추출 -> DB 업데이트)
+     */
+    private void processUpdateWithFile(Worker worker, WorkerRegistrationDto dto, MultipartFile photoFile) throws IOException {
+        // 기존 파일 삭제
+        deleteFile(worker.getImagePath());
+
+        // 새 파일 저장 및 벡터 추출
+        String newFileName = saveFile(photoFile, dto.getEmployeeNumber());
+        String savedFilePath = UPLOAD_DIR + newFileName;
+        List<Double> vectorList = aiProcessingService.extractFaceVector(photoFile);
+
+        // DB 업데이트 (네이티브 쿼리 사용)
+        workerRepository.updateWorkerWithVector(
+                worker.getId(),
+                dto.getName(),
+                dto.getEmployeeNumber(),
+                dto.getTeam(),
+                savedFilePath,
+                vectorList.toString()
+        );
     }
 
     // 파일 저장 헬퍼 메서드

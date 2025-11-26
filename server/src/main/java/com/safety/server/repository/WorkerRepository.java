@@ -8,11 +8,16 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional; // 추가됨
+
 @Repository
 public interface WorkerRepository extends JpaRepository<Worker, Long> {
 
-    // 사번 중복 체크
+    // 사번 중복 체크 (기존)
     boolean existsByEmployeeNumber(String employeeNumber);
+
+    // 🆕 [추가] 사번으로 작업자 정보 조회 (수정 시 ID를 찾기 위해 필요)
+    Optional<Worker> findByEmployeeNumber(String employeeNumber);
 
     // 🛠️ [등록] vector 타입 데이터를 저장하기 위한 네이티브 쿼리
     @Modifying
@@ -29,7 +34,6 @@ public interface WorkerRepository extends JpaRepository<Worker, Long> {
     );
 
     // 🛠️ [수정] vector 및 정보 업데이트를 위한 네이티브 쿼리
-    // ⚠️ 수정됨: @Transactional 추가 및 파라미터 이름 통일
     @Modifying
     @Transactional
     @Query(value = "UPDATE workers SET " +
