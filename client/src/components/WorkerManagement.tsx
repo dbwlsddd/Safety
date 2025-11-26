@@ -590,7 +590,7 @@ export function WorkerManagement({
                     </div>
 
                     <div className="flex justify-between pt-4 flex-none">
-                      <Button variant="outline" onClick={() => setBulkStep(1)} className="border-slate-700 text-white hover:bg-slate-800">이전</Button>
+                      <Button variant="outline" onClick={() => setBulkStep(1)} className="bg-slate-700 hover:bg-slate-800 text-white shadow-lg">이전</Button>
                       <Button onClick={executeBulkUpload} className="bg-green-600 hover:bg-green-700 text-white shadow-lg">
                         일괄 등록 완료
                       </Button>
