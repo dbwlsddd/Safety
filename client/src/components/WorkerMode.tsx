@@ -3,7 +3,6 @@ import Webcam from 'react-webcam';
 import { Worker, WorkerStatus } from '../types';
 import { LogIn, LogOut, ArrowLeft, UserCheck, Coffee, DoorOpen } from 'lucide-react';
 import { Button } from './ui/button';
-import { Chatbot } from './Chatbot';
 
 // -------------------------------------------------------------------------
 // 🛠️ 설정: Python FastAPI 서버 설정
@@ -15,11 +14,11 @@ const FRAME_SEND_INTERVAL_MS = 500;
 interface WorkerModeProps {
   workers: Worker[];
   requiredEquipment: string[];
-  workerStatusMap: Record<string, WorkerStatus>; // ✅ 변경: 작업자 상태 맵
+  workerStatusMap: Record<string, WorkerStatus>;
   onCheckIn: (workerId: string) => void;
   onCheckOut: (workerId: string) => void;
-  onRest: (workerId: string) => void;   // ✅ 추가: 외출 핸들러
-  onReturn: (workerId: string) => void; // ✅ 추가: 복귀 핸들러
+  onRest: (workerId: string) => void;
+  onReturn: (workerId: string) => void;
   onBack: () => void;
 }
 
@@ -32,20 +31,17 @@ export function WorkerMode({
                              onReturn,
                              onBack,
                            }: WorkerModeProps) {
-  // 단계: 얼굴인식 -> (분기) -> 장비검사 OR 근무중메뉴
   const [step, setStep] = useState<'face-recognition' | 'equipment-check' | 'working-menu'>('face-recognition');
 
   const [recognizedWorker, setRecognizedWorker] = useState<Worker | null>(null);
   const [currentStatus, setCurrentStatus] = useState<WorkerStatus>('OFF_WORK');
   const [detectedEquipment, setDetectedEquipment] = useState<{ [key: string]: boolean }>({});
 
-  // 웹캠 관련
   const webcamRef = useRef<Webcam>(null);
   const [camError, setCamError] = useState<string | null>(null);
   const [isCamReady, setIsCamReady] = useState(false);
   const [recognitionStatus, setRecognitionStatus] = useState("웹캠 준비 중...");
 
-  // 웹소켓 관련
   const websocketRef = useRef<WebSocket | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -81,9 +77,8 @@ export function WorkerMode({
         type: "CONFIG",
         required: requiredEquipment
       };
-      websocketRef.current.send(JSON.stringify(configPayload));
+      websocketRef.current?.send(JSON.stringify(configPayload));
 
-      // 프레임 전송 루프 시작
       intervalRef.current = setInterval(() => {
         if (!webcamRef.current || !websocketRef.current || websocketRef.current.readyState !== WebSocket.OPEN) {
           return;
@@ -106,11 +101,9 @@ export function WorkerMode({
         if (message.status === "SUCCESS") {
           const serverWorker = message.worker;
 
-          // 1. 얼굴 인식 성공 시 로직 (처음 인식된 경우)
-          if (!recognizedWorker) {
+          // 1. 얼굴 인식 성공 시 로직
+          if (!recognizedWorker) { // 여기서 기존 인식된 사람이 있으면 다시 세팅하지 않음 (중요)
             const workerId = String(serverWorker.worker_id);
-
-            // 현재 상태 조회 (App.tsx에서 전달받은 Map 사용)
             const status = workerStatusMap[workerId] || 'OFF_WORK';
 
             const worker: Worker = {
@@ -122,19 +115,16 @@ export function WorkerMode({
             setRecognizedWorker(worker);
             setCurrentStatus(status);
 
-            // 🚀 상태에 따른 화면 분기 처리 (핵심 로직)
             if (status === 'WORKING') {
-              // 일하는 중 -> 보호구 검사 생략 -> 바로 메뉴(외출/퇴근)로 이동
               setStep('working-menu');
               setRecognitionStatus("근무 중입니다.");
             } else {
-              // 퇴근 상태(OFF) 또는 휴식 중(RESTING) -> 보호구 검사 필요 -> 검사 화면으로 이동
               setStep('equipment-check');
               setRecognitionStatus(status === 'RESTING' ? "복귀 전 안전 검사" : "출근 전 안전 검사");
             }
           }
 
-          // 2. 보호구 감지 결과 업데이트 (실시간)
+          // 2. 보호구 감지 결과 업데이트
           if (message.ppe_status && message.ppe_status.detections) {
             const detections = message.ppe_status.detections;
             const detectedLabels = new Set(detections.map((d: any) => d.label));
@@ -150,7 +140,8 @@ export function WorkerMode({
           }
 
         } else if (message.status === "FAILURE") {
-          if (!recognizedWorker) {
+          // 얼굴을 놓쳤을 때, 이미 인식된 상태(메뉴나 검사화면)라면 화면을 유지해야 함
+          if (!recognizedWorker && step === 'face-recognition') {
             setRecognitionStatus("얼굴을 찾을 수 없습니다.");
           }
         }
@@ -174,12 +165,12 @@ export function WorkerMode({
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (websocketRef.current) websocketRef.current.close();
     };
-  }, [isCamReady, recognizedWorker, requiredEquipment, workerStatusMap]);
+  }, [isCamReady, requiredEquipment, workerStatusMap]);
+  // ⚠️ [수정] recognizedWorker를 의존성 배열에서 뺐습니다.
+  // 이유: 인식된 후에도 소켓 연결을 유지하고 보호구 데이터를 계속 받기 위함.
 
-  // 모든 보호구 착용 확인
   const allEquipmentDetected = requiredEquipment.length > 0 && requiredEquipment.every(eq => detectedEquipment[eq]);
 
-  // 초기화 (처음으로 돌아가기)
   const handleReset = () => {
     setStep('face-recognition');
     setRecognizedWorker(null);
@@ -188,9 +179,14 @@ export function WorkerMode({
     setRecognitionStatus("얼굴 인식 중...");
   };
 
-  // 버튼 액션 핸들러 통합
+  // 🛠️ [로그 문제 해결 핵심] 버튼 클릭 시 핸들러 호출 보장
   const handleAction = (action: 'CHECK_IN' | 'CHECK_OUT' | 'REST' | 'RETURN') => {
-    if (!recognizedWorker) return;
+    if (!recognizedWorker) {
+      console.error("작업자 정보가 없어 액션을 수행할 수 없습니다.");
+      return;
+    }
+
+    console.log(`액션 실행: ${action}, 작업자: ${recognizedWorker.name}`); // 디버깅 로그
 
     switch (action) {
       case 'CHECK_IN': onCheckIn(recognizedWorker.id); break;
@@ -199,8 +195,8 @@ export function WorkerMode({
       case 'RETURN': onReturn(recognizedWorker.id); break;
     }
 
-    // 액션 후 잠시 대기했다가 초기화 (UX)
-    setTimeout(() => handleReset(), 1000);
+    // 약간의 지연 후 초기화 (사용자가 완료 메시지를 볼 틈을 줌)
+    setTimeout(() => handleReset(), 500);
   };
 
   return (
@@ -240,10 +236,8 @@ export function WorkerMode({
                 />
             )}
 
-            {/* 오버레이 가이드 */}
             <div className="absolute inset-0 border-[20px] border-black/50 pointer-events-none z-10"></div>
 
-            {/* 상태 메시지 하단 오버레이 */}
             <div className="absolute bottom-6 bg-slate-900/80 px-6 py-2 rounded-full border border-cyan-500/30 z-20">
               <p className="text-cyan-400 font-semibold">{recognitionStatus}</p>
             </div>
@@ -270,7 +264,7 @@ export function WorkerMode({
                   <p className="text-gray-400 mb-6">카메라 정면을 응시해주세요.</p>
               )}
 
-              {/* [CASE A] 보호구 검사 화면 (퇴근 상태 or 휴식 중일 때) */}
+              {/* [CASE A] 보호구 검사 화면 */}
               {step === 'equipment-check' && (
                   <div className="flex-1 flex flex-col">
                     <div className="space-y-2 mb-6 flex-1">
@@ -285,7 +279,6 @@ export function WorkerMode({
                           </div>
                       ))}
                     </div>
-                    {/* 버튼: 상태에 따라 출근 또는 복귀 */}
                     <Button
                         onClick={() => handleAction(currentStatus === 'RESTING' ? 'RETURN' : 'CHECK_IN')}
                         disabled={!allEquipmentDetected}
@@ -298,7 +291,7 @@ export function WorkerMode({
                   </div>
               )}
 
-              {/* [CASE B] 근무 중 메뉴 (이미 출근한 상태) */}
+              {/* [CASE B] 근무 중 메뉴 */}
               {step === 'working-menu' && (
                   <div className="flex-1 flex flex-col gap-3 justify-center">
                     <p className="text-blue-200 text-center mb-4 font-medium">
@@ -322,14 +315,11 @@ export function WorkerMode({
               )}
             </div>
 
-            {/* 리셋 버튼 */}
             <Button onClick={handleReset} variant="ghost" className="text-gray-500 hover:text-white h-12">
               처음으로 돌아가기
             </Button>
           </div>
         </div>
-
-        <Chatbot />
       </div>
   );
 }
