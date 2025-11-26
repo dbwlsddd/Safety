@@ -4,7 +4,7 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { WorkerMode } from './components/WorkerMode';
 import { InspectionScreen } from './components/InspectionScreen';
 import { Worker, AccessLogEntry, SystemConfig } from './types';
-import { WorkerFormData } from './components/WorkerManagement'; // 🛠️ 타입 임포트
+import { WorkerFormData } from './components/WorkerManagement';
 
 type Screen = 'mode-selection' | 'admin' | 'worker' | 'inspection';
 
@@ -63,7 +63,7 @@ export default function App() {
     }
   };
 
-  // 🛠️ [수정됨] FormData를 이용한 개별 등록 구현
+  // 🛠️ FormData를 이용한 개별 등록 구현
   const handleAddWorker = async (workerData: WorkerFormData) => {
     const formData = new FormData();
     formData.append("employeeNumber", workerData.employeeNumber);
@@ -96,7 +96,7 @@ export default function App() {
     }
   };
 
-  // 🛠️ [수정됨] FormData를 이용한 개별 수정 구현
+  // 🛠️ FormData를 이용한 개별 수정 구현
   const handleUpdateWorker = async (id: string, workerData: WorkerFormData) => {
     const formData = new FormData();
     formData.append("employeeNumber", workerData.employeeNumber);
@@ -127,7 +127,7 @@ export default function App() {
     }
   };
 
-  // 🛠️ [수정됨] 서버 API 호출로 삭제 구현
+  // 🛠️ 서버 API 호출로 삭제 구현
   const handleDeleteWorker = async (id: string) => {
     if (!window.confirm("정말 삭제하시겠습니까?")) return;
 
@@ -148,31 +148,39 @@ export default function App() {
     }
   };
 
-  const handleBulkUpload = async (workersData: any[]) => {
-    try {
-      // 1. 서버로 일괄 등록 요청 보내기
-      const formData = new FormData();
-      formData.append('data', JSON.stringify(workersData.map(w => ({
-        employeeNumber: w.employeeNumber,
+  // 🛠️ [수정됨] 일괄 등록 후 목록 자동 갱신
+  const handleBulkUpload = async (newWorkers: any[]) => {
+    const formData = new FormData();
+    const dtos = [];
+
+    for (const w of newWorkers) {
+      dtos.push({
         name: w.name,
-        team: w.team
-      }))));
-
-      workersData.forEach(w => {
-        if (w.photoFile) {
-          formData.append('files', w.photoFile);
-        }
+        employeeNumber: w.employeeNumber,
+        team: w.team,
+        mappedFileName: w.photoFile ? w.photoFile.name : null
       });
+      if (w.photoFile) {
+        formData.append("files", w.photoFile);
+      }
+    }
+    formData.append("data", JSON.stringify(dtos));
 
-      await api.post('/api/workers/bulk', formData); // API 호출
-
-      // 👇 [핵심] 등록 성공 후, 목록을 다시 불러와야 화면이 갱신됩니다!
-      await fetchWorkers();
-
-      alert('일괄 등록이 완료되었습니다.'); // 사용자 알림
+    try {
+      const response = await fetch(`${API_BASE_URL}/workers/bulk`, {
+        method: "POST",
+        body: formData,
+      });
+      if (response.ok) {
+        alert("일괄 등록 완료");
+        // 👇 등록 완료 후 목록을 다시 불러옵니다 (자동 새로고침 효과)
+        await fetchWorkers();
+      } else {
+        alert("등록 실패");
+      }
     } catch (error) {
-      console.error('Upload failed:', error);
-      alert('일괄 등록 실패');
+      console.error("업로드 오류:", error);
+      alert("통신 오류");
     }
   };
 
