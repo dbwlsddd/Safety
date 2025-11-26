@@ -94,7 +94,7 @@ public class WorkerController {
         }
     }
 
-    @DeleteMapping("/batch")
+    @PostMapping("/batch-delete")
     public ResponseEntity<Void> deleteWorkers(@RequestBody List<Long> ids) {
         workerService.deleteWorkers(ids);
         return ResponseEntity.noContent().build();

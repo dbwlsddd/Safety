@@ -272,9 +272,9 @@ export default function App() {
 
   const handleBulkDelete = async (ids: string[]) => {
     try {
-      // 👇 API_BASE_URL을 사용하도록 수정해주세요 (8443 포트)
-      const response = await fetch(`${API_BASE_URL}/workers/batch`, {
-        method: "DELETE",
+      // 🛠️ [수정] DELETE -> POST로 변경하고, 주소도 '/workers/batch-delete'로 수정
+      const response = await fetch(`${API_BASE_URL}/workers/batch-delete`, {
+        method: "POST", // method 변경
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(ids),
       });
@@ -282,7 +282,7 @@ export default function App() {
       if (response.ok) {
         // 성공 시 목록 새로고침
         await fetchWorkers();
-        alert("삭제되었습니다."); // (선택 사항) 사용자 알림 추가
+        alert("선택한 작업자가 삭제되었습니다.");
       } else {
         console.error("삭제 실패");
         alert("삭제에 실패했습니다.");
