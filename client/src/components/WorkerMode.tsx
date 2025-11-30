@@ -23,7 +23,7 @@ interface WorkerModeProps {
   onBack: () => void;
 }
 
-export default function WorkerMode({
+export function WorkerMode({
                                      requiredEquipment,
                                      workerStatusMap,
                                      onCheckIn,
