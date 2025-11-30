@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Users, FileText, Settings, LogOut, LayoutDashboard, Menu } from 'lucide-react';
-import { WorkerManagement, WorkerFormData } from './WorkerManagement'; // 🛠️ 타입 임포트
+import WorkerManagement, { WorkerFormData } from './WorkerManagement'; // 🛠️ 타입 임포트
 import { AccessLog } from './AccessLog';
-import { SystemSettings } from './SystemSettings';
-import { Dashboard } from './Dashboard';
+import SystemSettings from './SystemSettings';
+import Dashboard from './Dashboard';
 import { Worker, AccessLogEntry, SystemConfig } from '../types';
 import { Sheet, SheetContent, SheetTrigger } from './ui/sheet';
 import { Button } from './ui/button';
