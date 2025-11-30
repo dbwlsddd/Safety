@@ -239,7 +239,7 @@ export function WorkerMode({
             <div className="absolute inset-0 border-[20px] border-black/50 pointer-events-none z-10"></div>
 
             <div className="absolute bottom-6 bg-slate-900/80 px-6 py-2 rounded-full border border-cyan-500/30 z-20">
-              <p className="text-cyan-400 font-semibold">{recognitionStatus}</p>
+              <p className="text-gray-400 font-semibold">{recognitionStatus}</p>
             </div>
           </div>
 
@@ -255,7 +255,7 @@ export function WorkerMode({
                   <div className="mb-6 p-4 bg-cyan-900/20 border border-cyan-500/30 rounded-xl">
                     <p className="text-cyan-400 font-bold text-lg">{recognizedWorker.name} 님</p>
                     <p className="text-gray-400 text-sm">{recognizedWorker.team} / {recognizedWorker.employeeNumber}</p>
-                    <div className="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    <div className="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-gray-400">
                       {currentStatus === 'WORKING' ? '근무 중' :
                           currentStatus === 'RESTING' ? '휴식/외출 중' : '퇴근 상태'}
                     </div>
