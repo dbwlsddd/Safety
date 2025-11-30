@@ -26,7 +26,7 @@ const equipmentOptions: EquipmentOption[] = [
   { name: '하네스', icon: Anchor },
 ];
 
-export default function SystemSettings() {
+export function SystemSettings() {
   // 상태 관리
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment[]>([]);
   const [warningDelay, setWarningDelay] = useState(10);
