@@ -36,7 +36,7 @@ public class WorkerService {
 
     // 전체 작업자 조회
     public List<Worker> getAllWorkers() {
-        return workerRepository.findAll(Sort.by(Sort.Direction.ASC, "employeeNumber"));
+        return workerRepository.findAllByEmployeeNumberAsc();
     }
 
     // [신규] 개별 작업자 등록

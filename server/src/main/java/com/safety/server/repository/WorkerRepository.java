@@ -8,10 +8,15 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional; // 추가됨
 
 @Repository
 public interface WorkerRepository extends JpaRepository<Worker, Long> {
+
+    // employeeNumber ASC Sort 조회
+    @Query(value = "SELECT * FROM public.workers ORDER BY CAST(employeeNumber as INTEGER) ASC", nativeQuery = true)
+    List<Worker> findAllByEmployeeNumberAsc();
 
     // 사번 중복 체크 (기존)
     boolean existsByEmployeeNumber(String employeeNumber);
