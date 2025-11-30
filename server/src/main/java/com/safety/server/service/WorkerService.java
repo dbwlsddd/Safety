@@ -3,6 +3,7 @@ package com.safety.server.service;
 import com.safety.server.dto.WorkerRegistrationDto;
 import com.safety.server.entity.Worker;
 import com.safety.server.repository.WorkerRepository;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -35,7 +36,7 @@ public class WorkerService {
 
     // 전체 작업자 조회
     public List<Worker> getAllWorkers() {
-        return workerRepository.findAll();
+        return workerRepository.findAll(Sort.by(Sort.Direction.ASC, "employeeNumber"));
     }
 
     // [신규] 개별 작업자 등록

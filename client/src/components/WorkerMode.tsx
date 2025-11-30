@@ -45,6 +45,10 @@ export function WorkerMode({
   const websocketRef = useRef<WebSocket | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // ✅ [추가] 작업자 인식 잠금용 Ref
+  // 얼굴이 한 번 인식되면 true가 되어, 리셋 전까지 다른 얼굴 인식을 막습니다.
+  const isWorkerLockedRef = useRef(false);
+
   // 1. 웹캠 시작
   useEffect(() => {
     const startCamera = async () => {
@@ -101,8 +105,12 @@ export function WorkerMode({
         if (message.status === "SUCCESS") {
           const serverWorker = message.worker;
 
-          // 1. 얼굴 인식 성공 시 로직
-          if (!recognizedWorker) { // 여기서 기존 인식된 사람이 있으면 다시 세팅하지 않음 (중요)
+          // ✅ [핵심 수정] 작업자가 아직 잠기지(확정되지) 않았을 때만 인식 수행
+          if (!isWorkerLockedRef.current) {
+
+            // 1. 인식되자마자 잠금 걸기 (다른 사람 인식 방지)
+            isWorkerLockedRef.current = true;
+
             const workerId = String(serverWorker.worker_id);
             const status = workerStatusMap[workerId] || 'OFF_WORK';
 
@@ -112,6 +120,8 @@ export function WorkerMode({
               team: serverWorker.department,
               employeeNumber: serverWorker.employee_number,
             };
+
+            // 2. 상태 업데이트
             setRecognizedWorker(worker);
             setCurrentStatus(status);
 
@@ -124,7 +134,8 @@ export function WorkerMode({
             }
           }
 
-          // 2. 보호구 감지 결과 업데이트
+          // 3. 보호구 감지 결과 업데이트
+          // (작업자가 잠긴 상태여도, 그 사람의 보호구 착용 상태는 계속 업데이트 받아야 함)
           if (message.ppe_status && message.ppe_status.detections) {
             const detections = message.ppe_status.detections;
             const detectedLabels = new Set(detections.map((d: any) => d.label));
@@ -140,8 +151,8 @@ export function WorkerMode({
           }
 
         } else if (message.status === "FAILURE") {
-          // 얼굴을 놓쳤을 때, 이미 인식된 상태(메뉴나 검사화면)라면 화면을 유지해야 함
-          if (!recognizedWorker && step === 'face-recognition') {
+          // 얼굴을 놓쳤을 때, '아직 작업자가 확정되지 않은 상태(1단계)'일 때만 메시지 변경
+          if (!isWorkerLockedRef.current && step === 'face-recognition') {
             setRecognitionStatus("얼굴을 찾을 수 없습니다.");
           }
         }
@@ -166,12 +177,14 @@ export function WorkerMode({
       if (websocketRef.current) websocketRef.current.close();
     };
   }, [isCamReady, requiredEquipment, workerStatusMap]);
-  // ⚠️ [수정] recognizedWorker를 의존성 배열에서 뺐습니다.
-  // 이유: 인식된 후에도 소켓 연결을 유지하고 보호구 데이터를 계속 받기 위함.
+  // recognizedWorker는 의존성 배열에서 제외하여, 인식 후에도 소켓 연결 유지
 
   const allEquipmentDetected = requiredEquipment.length > 0 && requiredEquipment.every(eq => detectedEquipment[eq]);
 
   const handleReset = () => {
+    // ✅ [추가] 초기화 시 잠금 해제
+    isWorkerLockedRef.current = false;
+
     setStep('face-recognition');
     setRecognizedWorker(null);
     setDetectedEquipment({});
@@ -179,14 +192,13 @@ export function WorkerMode({
     setRecognitionStatus("얼굴 인식 중...");
   };
 
-  // 🛠️ [로그 문제 해결 핵심] 버튼 클릭 시 핸들러 호출 보장
   const handleAction = (action: 'CHECK_IN' | 'CHECK_OUT' | 'REST' | 'RETURN') => {
     if (!recognizedWorker) {
       console.error("작업자 정보가 없어 액션을 수행할 수 없습니다.");
       return;
     }
 
-    console.log(`액션 실행: ${action}, 작업자: ${recognizedWorker.name}`); // 디버깅 로그
+    console.log(`액션 실행: ${action}, 작업자: ${recognizedWorker.name}`);
 
     switch (action) {
       case 'CHECK_IN': onCheckIn(recognizedWorker.id); break;
@@ -195,7 +207,7 @@ export function WorkerMode({
       case 'RETURN': onReturn(recognizedWorker.id); break;
     }
 
-    // 약간의 지연 후 초기화 (사용자가 완료 메시지를 볼 틈을 줌)
+    // 작업 완료 후 잠시 대기했다가 초기화
     setTimeout(() => handleReset(), 500);
   };
 
