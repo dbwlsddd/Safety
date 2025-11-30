@@ -15,7 +15,7 @@ import java.util.Optional; // 추가됨
 public interface WorkerRepository extends JpaRepository<Worker, Long> {
 
     // employeeNumber ASC Sort 조회
-    @Query(value = "SELECT * FROM public.workers ORDER BY CAST(employeeNumber as INTEGER) ASC", nativeQuery = true)
+    @Query(value = "SELECT * FROM public.workers ORDER BY CAST(employee_number as INTEGER) ASC", nativeQuery = true)
     List<Worker> findAllByEmployeeNumberAsc();
 
     // 사번 중복 체크 (기존)
