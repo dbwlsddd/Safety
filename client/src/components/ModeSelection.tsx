@@ -9,7 +9,7 @@ interface ModeSelectionProps {
   adminPassword?: string;
 }
 
-export function ModeSelection({ onSelectMode }: ModeSelectionProps) {
+export function ModeSelection({ onSelectMode, adminPassword = '1234' }: ModeSelectionProps) {
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
