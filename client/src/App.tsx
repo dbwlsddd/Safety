@@ -15,7 +15,7 @@ const SERVER_URL = "https://100.64.239.86:8443";
 const defaultConfig: SystemConfig = {
   requiredEquipment: ['헬멧', '조끼'],
   warningDelaySeconds: 10,
-  adminPassword: '1234',
+  adminPassword: '',
 };
 
 export default function App() {
@@ -30,7 +30,39 @@ export default function App() {
   // 앱 시작 시 서버에서 데이터 가져오기
   useEffect(() => {
     fetchWorkers();
+    fetchConfig();
   }, []);
+
+  // 🛠️ [추가] 시스템 설정 가져오기 및 파싱 로직
+  const fetchConfig = async () => {
+    try {
+      // API 엔드포인트는 백엔드 구현에 따라 '/config' 또는 '/system-config' 등으로 수정하세요.
+      const response = await fetch(`${API_BASE_URL}/api/workers/equipment`);
+
+      if (response.ok) {
+        const data = await response.json();
+
+        // 🔥 [핵심] 서버 데이터가 "A,B,C" 형태의 문자열일 경우 배열로 변환
+        let parsedEquipment = defaultConfig.requiredEquipment;
+
+        if (data.requiredEquipment && typeof data.requiredEquipment === 'string') {
+          parsedEquipment = data.requiredEquipment
+              .split(',')                 // 쉼표로 자르기
+              .map((item: string) => item.trim()) // 앞뒤 공백 제거
+              .filter((item: string) => item !== ''); // 빈 문자열 제거
+        }
+
+        setConfig(prev => ({
+          ...prev, // 기존의 adminPassword, warningDelaySeconds 유지
+          requiredEquipment: parsedEquipment
+        }));
+
+        console.log("설정 로드 완료:", parsedEquipment);
+      }
+    } catch (error) {
+      console.error("설정 로드 실패 (기본값 사용):", error);
+    }
+  };
 
   const fetchWorkers = async () => {
     try {
@@ -284,7 +316,6 @@ export default function App() {
         {currentScreen === 'mode-selection' && (
             <ModeSelection
                 onSelectMode={handleSelectMode}
-                adminPassword={config.adminPassword || '1234'}
             />
         )}
         {currentScreen === 'admin' && (

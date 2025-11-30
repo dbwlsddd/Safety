@@ -1,9 +1,12 @@
 package com.safety.server.service;
 
 import com.safety.server.dto.WorkerRegistrationDto;
+import com.safety.server.entity.SystemConfig;
 import com.safety.server.entity.Worker;
+import com.safety.server.repository.SystemConfigRepository;
 import com.safety.server.repository.WorkerRepository;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -12,10 +15,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -23,15 +23,17 @@ import java.util.stream.Collectors;
 public class WorkerService {
 
     private final WorkerRepository workerRepository;
+    private final SystemConfigRepository systemConfigRepository;
     private final AiProcessingService aiProcessingService;
 
     // 🛠️ [수정됨] 서버 실행 위치(server/) 기준으로 Safety/images/ 경로 설정
     // 끝에 슬래시(/) 포함
     private final String UPLOAD_DIR = "../images/";
 
-    public WorkerService(AiProcessingService aiProcessingService, WorkerRepository workerRepository) {
+    public WorkerService(AiProcessingService aiProcessingService, WorkerRepository workerRepository, SystemConfigRepository systemConfigRepository) {
         this.aiProcessingService = aiProcessingService;
         this.workerRepository = workerRepository;
+        this.systemConfigRepository = systemConfigRepository;
     }
 
     // 전체 작업자 조회
@@ -160,6 +162,28 @@ public class WorkerService {
             throw new IllegalArgumentException("존재하지 않는 작업자입니다.");
         }
         workerRepository.updateWorkerStatus(id, status);
+    }
+
+    public ResponseEntity<?> selectEquipment() {
+        // 1. DB에서 설정 데이터 조회
+        List<SystemConfig> configs = systemConfigRepository.findAll();
+
+        // 데이터가 없을 경우를 대비해서 기본값 추가
+        String equipmentData = "헬멧,조끼";
+
+        // 데이터가 있다면 첫 번째 row의 값을 사용
+        if (!configs.isEmpty()) {
+            SystemConfig config = configs.get(0);
+            if (config.getRequiredEquipment() != null) {
+                equipmentData = config.getRequiredEquipment();
+            }
+        }
+
+        // 3. 프론트엔드가 원하는 JSON 형식 { "requiredEquipment": "헬멧,조끼" } 생성
+        Map<String, String> response = new HashMap<>();
+        response.put("requiredEquipment", equipmentData);
+
+        return ResponseEntity.ok(response);
     }
 
 

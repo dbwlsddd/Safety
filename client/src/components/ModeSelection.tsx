@@ -7,10 +7,8 @@ import { useState } from 'react';
 
 interface ModeSelectionProps {
   onSelectMode: (mode: 'admin' | 'worker') => void;
-  adminPassword?: string;
 }
 
-// export function ModeSelection({ onSelectMode, adminPassword = '1234' }: ModeSelectionProps) {
 export function ModeSelection({ onSelectMode }: ModeSelectionProps) {
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [password, setPassword] = useState('');

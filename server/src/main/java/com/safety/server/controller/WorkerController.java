@@ -3,6 +3,7 @@ package com.safety.server.controller;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.safety.server.dto.WorkerRegistrationDto;
+import com.safety.server.entity.SystemConfig;
 import com.safety.server.entity.Worker;
 import com.safety.server.service.WorkerService;
 import org.springframework.http.MediaType;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.RequestBody;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -138,5 +140,12 @@ public class WorkerController {
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body("오류 발생: " + e.getMessage());
         }
+    }
+
+    // 보호구 리스트 돌려주기
+    @GetMapping("/equipment")
+    public ResponseEntity<?> selectEquipment() {
+        
+        return workerService.selectEquipment();
     }
 }
