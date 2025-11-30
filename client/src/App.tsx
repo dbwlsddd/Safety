@@ -56,8 +56,6 @@ export default function App() {
           ...prev, // 기존의 adminPassword, warningDelaySeconds 유지
           requiredEquipment: parsedEquipment
         }));
-
-        console.log("설정 로드 완료:", parsedEquipment);
       }
     } catch (error) {
       console.error("설정 로드 실패 (기본값 사용):", error);

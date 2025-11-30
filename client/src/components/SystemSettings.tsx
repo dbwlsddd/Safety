@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Equipment } from '../types';
+import { Equipment, SystemConfig } from '../types';
 // ✅ 아이콘 import (Lock 충돌 방지 포함)
 import { Wind, Shield, HardHat, Glasses, Shirt, Footprints, Anchor, Activity, ShieldCheck, Save, Lock as LockIcon } from 'lucide-react';
 import { Button } from './ui/button';
@@ -25,7 +25,11 @@ const equipmentOptions: EquipmentOption[] = [
   { name: '하네스', icon: Anchor },
 ];
 
-export default function SystemSettings() {
+interface SystemSettingsProps {
+  onSaveConfig?: (newConfig: SystemConfig) => void;
+}
+
+export default function SystemSettings({ onSaveConfig }: SystemSettingsProps) {
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment[]>([]);
   const [warningDelay, setWarningDelay] = useState(10);
   const [adminPassword, setAdminPassword] = useState('');
@@ -109,6 +113,14 @@ export default function SystemSettings() {
         setServerData(updatedData);
         setHasChanges(false);
         toast.success("설정이 DB에 저장되었습니다.");
+
+        if (onSaveConfig) {
+          onSaveConfig({
+            requiredEquipment: selectedEquipment, // 문자열(,) -> 배열 변환된 상태 그대로 전달
+            warningDelaySeconds: warningDelay,
+            adminPassword: adminPassword
+          });
+        }
       } else {
         throw new Error("저장 실패");
       }
