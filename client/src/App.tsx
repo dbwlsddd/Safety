@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { ModeSelection } from './components/ModeSelection';
 import { AdminDashboard } from './components/AdminDashboard';
 import { WorkerMode } from './components/WorkerMode';
-import { InspectionScreen } from './components/InspectionScreen';
 import { Worker, AccessLogEntry, SystemConfig, WorkerStatus } from './types'; // ✅ 타입 추가
 import { WorkerFormData } from './components/WorkerManagement';
 
