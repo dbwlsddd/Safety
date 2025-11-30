@@ -6,12 +6,23 @@ import { useState } from 'react';
 
 interface ModeSelectionProps {
   onSelectMode: (mode: 'admin' | 'worker') => void;
+  adminPassword?: string;
 }
 
 export function ModeSelection({ onSelectMode }: ModeSelectionProps) {
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+
+  const handlePasswordSubmit = () => {
+    // ✅ 하드코딩된 '1234'를 prop으로 받은 adminPassword로 변경
+    if (password === adminPassword) {
+      setShowPasswordDialog(false);
+      onSelectMode('admin');
+    } else {
+      setError('비밀번호가 올바르지 않습니다.');
+    }
+  };
 
   const handleAdminClick = () => {
     setShowPasswordDialog(true);

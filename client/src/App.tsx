@@ -16,6 +16,7 @@ const SERVER_URL = "https://100.64.239.86:8443"; // 이미지를 불러올 서�
 const defaultConfig: SystemConfig = {
   requiredEquipment: ['헬멧', '조끼'],
   warningDelaySeconds: 10,
+  adminPassword: '1234',
 };
 
 export default function App() {
@@ -322,7 +323,11 @@ export default function App() {
   return (
       <div className="size-full">
         {currentScreen === 'mode-selection' && (
-            <ModeSelection onSelectMode={handleSelectMode} />
+            <ModeSelection
+                onSelectMode={handleSelectMode}
+                // ✅ 현재 설정된 비밀번호를 props로 전달
+                adminPassword={config.adminPassword || '1234'}
+            />
         )}
         {currentScreen === 'admin' && (
             <AdminDashboard

@@ -32,4 +32,5 @@ export interface AccessLogEntry {
 export interface SystemConfig {
   requiredEquipment: Equipment[];
   warningDelaySeconds: number;
+  adminPassword?: string; // ✅ 비밀번호 필드 추가 (기존 코드에 없었다면 추가)
 }
