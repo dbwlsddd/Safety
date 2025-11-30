@@ -30,15 +30,6 @@ export function ModeSelection({ onSelectMode }: ModeSelectionProps) {
     setError('');
   };
 
-  const handlePasswordSubmit = () => {
-    if (password === '1234') {
-      setShowPasswordDialog(false);
-      onSelectMode('admin');
-    } else {
-      setError('비밀번호가 올바르지 않습니다.');
-    }
-  };
-
   const handleWorkerClick = () => {
     onSelectMode('worker');
   };
