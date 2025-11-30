@@ -13,7 +13,7 @@ const SERVER_URL = "https://100.64.239.86:8443";
 
 // 기본 설정값
 const defaultConfig: SystemConfig = {
-  requiredEquipment: ['헬멧', '조끼'],
+  requiredEquipment: [],
   warningDelaySeconds: 10,
   adminPassword: '',
 };
@@ -37,7 +37,7 @@ export default function App() {
   const fetchConfig = async () => {
     try {
       // API 엔드포인트는 백엔드 구현에 따라 '/config' 또는 '/system-config' 등으로 수정하세요.
-      const response = await fetch(`${API_BASE_URL}/api/workers/equipment`);
+      const response = await fetch(`${API_BASE_URL}/workers/equipment`);
 
       if (response.ok) {
         const data = await response.json();
