@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Equipment, SystemConfig } from '../types';
-import { Wind, Shield, HardHat, Glasses, Shirt, Footprints, Anchor, Activity, ShieldCheck, Save } from 'lucide-react';
+// ✅ Lock을 LockIcon으로 이름을 바꿔서 import (충돌 방지)
+import { Wind, Shield, HardHat, Glasses, Shirt, Footprints, Anchor, Activity, ShieldCheck, Save, Lock as LockIcon } from 'lucide-react';
 import { Button } from './ui/button';
 import { Slider } from './ui/slider';
 import { Input } from './ui/input';
@@ -31,7 +32,7 @@ const equipmentOptions: EquipmentOption[] = [
 export function SystemSettings({ config, onSaveConfig }: SystemSettingsProps) {
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment[]>(config.requiredEquipment);
   const [warningDelay, setWarningDelay] = useState(config.warningDelaySeconds);
-  const [adminPassword, setAdminPassword] = useState(config.adminPassword || '1234'); // ✅ 비밀번호 state 추가
+  const [adminPassword, setAdminPassword] = useState(config.adminPassword || '1234');
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
@@ -39,7 +40,7 @@ export function SystemSettings({ config, onSaveConfig }: SystemSettingsProps) {
         selectedEquipment.length !== config.requiredEquipment.length ||
         selectedEquipment.some(eq => !config.requiredEquipment.includes(eq));
     const hasDelayChanges = warningDelay !== config.warningDelaySeconds;
-    const hasPasswordChanges = adminPassword !== (config.adminPassword || '1234'); // ✅ 비밀번호 변경 감지
+    const hasPasswordChanges = adminPassword !== (config.adminPassword || '1234');
 
     setHasChanges(hasEquipmentChanges || hasDelayChanges || hasPasswordChanges);
   }, [selectedEquipment, warningDelay, adminPassword, config]);
@@ -56,10 +57,10 @@ export function SystemSettings({ config, onSaveConfig }: SystemSettingsProps) {
     onSaveConfig({
       requiredEquipment: selectedEquipment,
       warningDelaySeconds: warningDelay,
-      adminPassword: adminPassword, // ✅ 저장 시 비밀번호 포함
+      adminPassword: adminPassword,
     });
     setHasChanges(false);
-    alert("설정이 저장되었습니다."); // 피드백 추가
+    alert("설정이 저장되었습니다.");
   };
 
   return (
@@ -73,7 +74,7 @@ export function SystemSettings({ config, onSaveConfig }: SystemSettingsProps) {
         </div>
 
         <div className="space-y-6">
-          {/* 1. 필수 보호구 설정 (기존 코드 유지) */}
+          {/* 1. 필수 보호구 설정 */}
           <div className="bg-slate-900/50 rounded-xl border border-slate-800 p-6">
             <div className="mb-6">
               <h3 className="text-white mb-2">필수 보호구 설정</h3>
@@ -81,7 +82,7 @@ export function SystemSettings({ config, onSaveConfig }: SystemSettingsProps) {
                 현장에서 착용이 필요한 보호구를 선택하세요
               </p>
             </div>
-            {/* ... 보호구 그리드 코드 생략 (기존과 동일) ... */}
+
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
               {equipmentOptions.map(({ name, icon: Icon }) => (
                   <button
@@ -139,7 +140,7 @@ export function SystemSettings({ config, onSaveConfig }: SystemSettingsProps) {
             </div>
           </div>
 
-          {/* 2. 경고 시스템 설정 (기존 코드 유지) */}
+          {/* 2. 경고 시스템 설정 */}
           <div className="bg-slate-900/50 rounded-xl border border-slate-800 p-6">
             <div className="mb-6">
               <h3 className="text-white mb-2">경고 시스템 설정</h3>
@@ -147,6 +148,7 @@ export function SystemSettings({ config, onSaveConfig }: SystemSettingsProps) {
                 보호구 미착용 감지 시 경고 유예 시간을 설정합니다
               </p>
             </div>
+
             <div className="space-y-6">
               <div>
                 <div className="flex items-center justify-between mb-4">
@@ -180,11 +182,12 @@ export function SystemSettings({ config, onSaveConfig }: SystemSettingsProps) {
             </div>
           </div>
 
-          {/* ✅ 3. 보안 설정 (비밀번호 변경 추가) */}
+          {/* 3. 관리자 보안 설정 */}
           <div className="bg-slate-900/50 rounded-xl border border-slate-800 p-6">
             <div className="mb-6 flex items-start gap-4">
               <div className="p-3 bg-red-500/10 rounded-lg">
-                <Lock className="w-6 h-6 text-red-500" />
+                {/* ✅ 여기서 Lock 대신 LockIcon 사용 */}
+                <LockIcon className="w-6 h-6 text-red-500" />
               </div>
               <div>
                 <h3 className="text-white mb-2">관리자 보안 설정</h3>
@@ -198,7 +201,7 @@ export function SystemSettings({ config, onSaveConfig }: SystemSettingsProps) {
               <div className="space-y-2">
                 <label className="text-white text-sm">새 비밀번호</label>
                 <Input
-                    type="text" // 확인을 위해 text로 두거나 보안을 위해 password로 변경 가능
+                    type="text"
                     value={adminPassword}
                     onChange={(e) => setAdminPassword(e.target.value)}
                     placeholder="변경할 비밀번호 입력"
