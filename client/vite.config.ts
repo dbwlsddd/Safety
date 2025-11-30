@@ -60,6 +60,13 @@ export default defineConfig({
       cert: fs.readFileSync(path.resolve(__dirname, 'safety.crt'))
     },
 
-    host: '0.0.0.0'
+    host: '0.0.0.0',
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8443', // 백엔드 주소 (포트 확인 필요)
+        changeOrigin: true,
+        secure: false, // 백엔드가 HTTPS가 아니거나 인증서가 없어도 허용
+      }
+    }
   }
 });
