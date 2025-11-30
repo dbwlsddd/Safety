@@ -2,14 +2,14 @@ import { useState, useEffect } from 'react';
 import { ModeSelection } from './components/ModeSelection';
 import { AdminDashboard } from './components/AdminDashboard';
 import { WorkerMode } from './components/WorkerMode';
-import { Worker, AccessLogEntry, SystemConfig, WorkerStatus } from './types'; // ✅ 타입 추가
+import { Worker, AccessLogEntry, SystemConfig, WorkerStatus } from './types';
 import { WorkerFormData } from './components/WorkerManagement';
 
-type Screen = 'mode-selection' | 'admin' | 'worker' | 'inspection';
+type Screen = 'mode-selection' | 'admin' | 'worker';
 
 // 🛠️ [중요] API 주소 및 서버 주소 설정
 const API_BASE_URL = "https://100.64.239.86:8443/api";
-const SERVER_URL = "https://100.64.239.86:8443"; // 이미지를 불러올 서버 루트 주소
+const SERVER_URL = "https://100.64.239.86:8443";
 
 // 기본 설정값
 const defaultConfig: SystemConfig = {
@@ -20,16 +20,11 @@ const defaultConfig: SystemConfig = {
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('mode-selection');
-
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [logs, setLogs] = useState<AccessLogEntry[]>([]);
-
   const [config, setConfig] = useState<SystemConfig>(defaultConfig);
-  const [inspectionPassed, setInspectionPassed] = useState(false);
-  const [currentWorkerId, setCurrentWorkerId] = useState<string | null>(null);
 
-  // 🛠️ [핵심 변경] 작업자 ID별 상태 관리 (Working/Resting/Off)
-  // 예: { "1": "WORKING", "2": "RESTING" }
+  // 🛠️ 작업자 ID별 상태 관리 (Working/Resting/Off)
   const [workerStatusMap, setWorkerStatusMap] = useState<Record<string, WorkerStatus>>({});
 
   // 앱 시작 시 서버에서 데이터 가져오기
@@ -43,13 +38,11 @@ export default function App() {
       if (response.ok) {
         const data = await response.json();
         const mappedWorkers: Worker[] = data.map((w: any) => {
-          // 🛠️ DB 이미지 경로 변환
           let photoUrl = null;
           if (w.imagePath) {
             const cleanPath = w.imagePath.replace("../images/", "images/");
             photoUrl = `${SERVER_URL}/${cleanPath}`;
           }
-
           return {
             id: String(w.id),
             name: w.name,
@@ -65,13 +58,12 @@ export default function App() {
     }
   };
 
-  // 🛠️ FormData를 이용한 개별 등록 구현
+  // 🛠️ 작업자 추가
   const handleAddWorker = async (workerData: WorkerFormData) => {
     const formData = new FormData();
     formData.append("employeeNumber", workerData.employeeNumber);
     formData.append("name", workerData.name);
     formData.append("team", workerData.team);
-
     if (workerData.photoFile) {
       formData.append("photoFile", workerData.photoFile);
     } else {
@@ -84,10 +76,9 @@ export default function App() {
         method: "POST",
         body: formData,
       });
-
       if (response.ok) {
         alert("작업자가 등록되었습니다.");
-        fetchWorkers(); // 목록 새로고침
+        fetchWorkers();
       } else {
         const errorText = await response.text();
         alert(`등록 실패: ${errorText}`);
@@ -98,13 +89,12 @@ export default function App() {
     }
   };
 
-  // 🛠️ FormData를 이용한 개별 수정 구현
+  // 🛠️ 작업자 수정
   const handleUpdateWorker = async (id: string, workerData: WorkerFormData) => {
     const formData = new FormData();
     formData.append("employeeNumber", workerData.employeeNumber);
     formData.append("name", workerData.name);
     formData.append("team", workerData.team);
-
     if (workerData.photoFile) {
       formData.append("photoFile", workerData.photoFile);
     }
@@ -114,7 +104,6 @@ export default function App() {
         method: "PUT",
         body: formData,
       });
-
       if (response.ok) {
         alert("작업자 정보가 수정되었습니다.");
         fetchWorkers();
@@ -128,15 +117,13 @@ export default function App() {
     }
   };
 
-  // 🛠️ 서버 API 호출로 삭제 구현
+  // 🛠️ 작업자 삭제
   const handleDeleteWorker = async (id: string) => {
     if (!window.confirm("정말 삭제하시겠습니까?")) return;
-
     try {
       const response = await fetch(`${API_BASE_URL}/workers/${id}`, {
         method: "DELETE",
       });
-
       if (response.ok) {
         alert("삭제되었습니다.");
         fetchWorkers();
@@ -153,7 +140,6 @@ export default function App() {
   const handleBulkUpload = async (newWorkers: any[]) => {
     const formData = new FormData();
     const dtos = [];
-
     for (const w of newWorkers) {
       dtos.push({
         name: w.name,
@@ -184,7 +170,7 @@ export default function App() {
     }
   };
 
-  // 🛠️ 일괄 삭제 (POST /batch-delete) - 405 에러 해결을 위해 POST 사용
+  // 🛠️ 일괄 삭제
   const handleBulkDelete = async (ids: string[]) => {
     try {
       const response = await fetch(`${API_BASE_URL}/workers/batch-delete`, {
@@ -192,12 +178,10 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(ids),
       });
-
       if (response.ok) {
         await fetchWorkers();
         alert("선택한 작업자가 삭제되었습니다.");
       } else {
-        console.error("삭제 실패");
         alert("삭제에 실패했습니다.");
       }
     } catch (error) {
@@ -224,12 +208,7 @@ export default function App() {
   };
 
   const handleSelectMode = (mode: 'admin' | 'worker') => {
-    if (mode === 'admin') {
-      setCurrentScreen('admin');
-    } else {
-      setCurrentScreen('worker');
-      setInspectionPassed(false);
-    }
+    setCurrentScreen(mode);
   };
 
   const handleLogout = () => {
@@ -270,7 +249,6 @@ export default function App() {
         details: '작업 종료'
       });
     }
-    setInspectionPassed(false);
   };
 
   // 3. 외출/휴식 (WORKING -> RESTING)
@@ -301,30 +279,11 @@ export default function App() {
     }
   };
 
-  // (구) 검사 화면용 - WorkerMode 사용 시에는 크게 쓰이지 않을 수 있음
-  const handleInspectionPass = () => {
-    setInspectionPassed(true);
-    const worker = workers.find(w => w.id === currentWorkerId);
-    if (worker) {
-      addLog({ workerName: worker.name, activity: '검사', status: '성공', details: '보호구 착용 확인' });
-    }
-    setCurrentScreen('worker');
-  };
-
-  const handleInspectionFail = () => {
-    const worker = workers.find(w => w.id === currentWorkerId);
-    if (worker) {
-      addLog({ workerName: worker.name, activity: '검사', status: '실패', details: '보호구 미착용' });
-    }
-    setCurrentScreen('worker');
-  };
-
   return (
       <div className="size-full">
         {currentScreen === 'mode-selection' && (
             <ModeSelection
                 onSelectMode={handleSelectMode}
-                // ✅ 현재 설정된 비밀번호를 props로 전달
                 adminPassword={config.adminPassword || '1234'}
             />
         )}
@@ -337,7 +296,7 @@ export default function App() {
                 onUpdateWorker={handleUpdateWorker}
                 onDeleteWorker={handleDeleteWorker}
                 onBulkUpload={handleBulkUpload}
-                onBulkDelete={handleBulkDelete} // ✅ 일괄 삭제 핸들러 전달
+                onBulkDelete={handleBulkDelete}
                 onDeleteLog={handleDeleteLog}
                 onSaveConfig={handleSaveConfig}
                 onLogout={handleLogout}
@@ -347,21 +306,12 @@ export default function App() {
             <WorkerMode
                 workers={workers}
                 requiredEquipment={config.requiredEquipment}
-                workerStatusMap={workerStatusMap} // ✅ 상태 맵 전달
+                workerStatusMap={workerStatusMap}
                 onCheckIn={handleCheckIn}
                 onCheckOut={handleCheckOut}
-                onRest={handleRest}     // ✅ 외출 핸들러
-                onReturn={handleReturn} // ✅ 복귀 핸들러
+                onRest={handleRest}
+                onReturn={handleReturn}
                 onBack={handleLogout}
-            />
-        )}
-        {currentScreen === 'inspection' && (
-            <InspectionScreen
-                requiredEquipment={config.requiredEquipment}
-                warningDelaySeconds={config.warningDelaySeconds}
-                onBack={() => setCurrentScreen('worker')}
-                onPass={handleInspectionPass}
-                onFail={handleInspectionFail}
             />
         )}
       </div>
