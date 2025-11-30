@@ -63,7 +63,7 @@ export default defineConfig({
     host: '0.0.0.0',
     proxy: {
       '/api': {
-        target: 'http://localhost:8080', // 백엔드 주소 (포트 확인 필요)
+        target: 'http://localhost:8443', // 백엔드 주소 (포트 확인 필요)
         changeOrigin: true,
         secure: false, // 백엔드가 HTTPS가 아니거나 인증서가 없어도 허용
       }
