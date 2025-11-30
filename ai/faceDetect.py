@@ -44,7 +44,9 @@ RECOGNITION_THRESHOLD = 0.45
 
 # 2. 얼굴 감지 백엔드 변경: 'opencv' -> 'retinaface' 또는 'ssd'
 # retinaface가 가장 정확하지만 느릴 수 있습니다. 속도가 중요하다면 'ssd' 추천.
-DETECTOR_BACKEND = "ssd"
+# DETECTOR_BACKEND = "ssd"
+
+DETECTOR_BACKEND = "retinaface"
 
 FACE_MODEL_NAME = "ArcFace"
 PPE_MODEL_PATH = "best.pt"
@@ -174,7 +176,9 @@ async def vectorize_face(file: UploadFile = File(...)):
             img_path=img,
             model_name=FACE_MODEL_NAME,
             detector_backend=DETECTOR_BACKEND, # 여기서도 백엔드 일치시켜야 함
-            enforce_detection=True # 등록할 땐 얼굴 없으면 에러 내는 게 맞음
+            enforce_detection=True, # 등록할 땐 얼굴 없으면 에러 내는 게 맞음
+            align=True,
+            normalization="ArcFace" # 정규화 명시
         )
         vector = embedding_objs[0]["embedding"]
 
