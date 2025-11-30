@@ -23,4 +23,6 @@ public class WorkerDto {
     // React: team, DB: department
     // (AI 서버가 department 값을 조회하여 "team"으로 반환해야 함)
     private String team;
+
+    private String status;
 }

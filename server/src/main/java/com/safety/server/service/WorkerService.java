@@ -152,6 +152,17 @@ public class WorkerService {
         }
     }
 
+    // 🆕 상태 변경 서비스 메서드
+    @Transactional
+    public void updateWorkerStatus(Long id, String status) {
+        // 존재 여부 확인
+        if (!workerRepository.existsById(id)) {
+            throw new IllegalArgumentException("존재하지 않는 작업자입니다.");
+        }
+        workerRepository.updateWorkerStatus(id, status);
+    }
+
+
     // =================================================================================
     // 내부 헬퍼 메서드 (코드 중복 방지)
     // =================================================================================

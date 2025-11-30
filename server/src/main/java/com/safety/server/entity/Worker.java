@@ -38,4 +38,8 @@ public class Worker {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
+
+    // 🆕 상태 필드 추가 (WORKING, RESTING, OFF_WORK)
+    @Column(name = "status", length = 20)
+    private String status = "OFF_WORK"; // 기본값은 퇴근 상태
 }

@@ -12,6 +12,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/workers")
@@ -117,6 +118,25 @@ public class WorkerController {
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.internalServerError().body("일괄 등록 중 오류 발생: " + e.getMessage());
+        }
+    }
+
+    // 🆕 작업자 상태 변경 (출근, 퇴근, 휴식 등)
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<?> updateWorkerStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        String newStatus = body.get("status"); // "WORKING", "RESTING", "OFF_WORK"
+
+        // 간단한 유효성 검사
+        if (newStatus == null ||
+                (!newStatus.equals("WORKING") && !newStatus.equals("RESTING") && !newStatus.equals("OFF_WORK"))) {
+            return ResponseEntity.badRequest().body("잘못된 상태 값입니다.");
+        }
+
+        try {
+            workerService.updateWorkerStatus(id, newStatus);
+            return ResponseEntity.ok().body("상태가 변경되었습니다.");
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("오류 발생: " + e.getMessage());
         }
     }
 }

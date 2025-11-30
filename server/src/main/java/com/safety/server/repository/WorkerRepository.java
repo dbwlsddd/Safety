@@ -19,11 +19,11 @@ public interface WorkerRepository extends JpaRepository<Worker, Long> {
     // 🆕 [추가] 사번으로 작업자 정보 조회 (수정 시 ID를 찾기 위해 필요)
     Optional<Worker> findByEmployeeNumber(String employeeNumber);
 
-    // 🛠️ [등록] vector 타입 데이터를 저장하기 위한 네이티브 쿼리
+    // 🛠️ [수정] INSERT 쿼리에 status 추가 (기본값 'OFF_WORK'로 들어가도록 처리하거나 명시)
     @Modifying
     @Transactional
-    @Query(value = "INSERT INTO workers (name, employee_number, department, image_path, face_vector, created_at) " +
-            "VALUES (:name, :employeeNumber, :department, :imagePath, CAST(:faceVector AS vector), NOW())",
+    @Query(value = "INSERT INTO workers (name, employee_number, department, image_path, face_vector, status, created_at) " +
+            "VALUES (:name, :employeeNumber, :department, :imagePath, CAST(:faceVector AS vector), 'OFF_WORK', NOW())",
             nativeQuery = true)
     void saveWorkerWithVector(
             @Param("name") String name,
@@ -32,6 +32,12 @@ public interface WorkerRepository extends JpaRepository<Worker, Long> {
             @Param("imagePath") String imagePath,
             @Param("faceVector") String faceVector
     );
+
+    // 🆕 [추가] 상태 변경을 위한 메서드
+    @Modifying
+    @Transactional
+    @Query("UPDATE Worker w SET w.status = :status WHERE w.id = :id")
+    void updateWorkerStatus(@Param("id") Long id, @Param("status") String status);
 
     // 🛠️ [수정] vector 및 정보 업데이트를 위한 네이티브 쿼리
     @Modifying

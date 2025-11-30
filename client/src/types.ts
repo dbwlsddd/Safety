@@ -13,11 +13,12 @@ export type Equipment =
 export type WorkerStatus = 'WORKING' | 'RESTING' | 'OFF_WORK';
 
 export interface Worker {
-  id: string;
+  id: number;
   employeeNumber: string;
   name: string;
   team: string;
   photoUrl?: string;
+  status?: WorkerStatus;
 }
 
 export interface AccessLogEntry {
@@ -30,7 +31,8 @@ export interface AccessLogEntry {
 }
 
 export interface SystemConfig {
-  requiredEquipment: Equipment[];
+  id?: number;
+  requiredEquipment: string;
   warningDelaySeconds: number;
   adminPassword?: string; // ✅ 비밀번호 필드 추가 (기존 코드에 없었다면 추가)
 }
