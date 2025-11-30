@@ -5,14 +5,13 @@ import { Wind, Shield, HardHat, Glasses, Shirt, Footprints, Anchor, Activity, Sh
 import { Button } from './ui/button';
 import { Slider } from './ui/slider';
 import { Input } from './ui/input';
-import { toast } from "sonner"; // 알림을 위해 sonner 사용 (설치되어 있다고 가정)
+import { toast } from "sonner";
 
 interface EquipmentOption {
   name: Equipment;
   icon: React.ComponentType<{ className?: string }>;
 }
 
-// 사용할 수 있는 보호구 목록 정의
 const equipmentOptions: EquipmentOption[] = [
   { name: '방독 마스크', icon: Wind },
   { name: '방진 마스크', icon: Wind },
@@ -26,17 +25,14 @@ const equipmentOptions: EquipmentOption[] = [
   { name: '하네스', icon: Anchor },
 ];
 
-export function SystemSettings() {
-  // 상태 관리
+export default function SystemSettings() {
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment[]>([]);
   const [warningDelay, setWarningDelay] = useState(10);
   const [adminPassword, setAdminPassword] = useState('');
 
-  // 변경 감지 및 로딩 상태
   const [hasChanges, setHasChanges] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // 비교를 위해 서버에서 가져온 초기 원본 데이터를 저장
   const [serverData, setServerData] = useState<{
     requiredEquipment: string;
     warningDelaySeconds: number;
@@ -46,9 +42,15 @@ export function SystemSettings() {
   // 1. 컴포넌트 마운트 시 DB에서 설정 불러오기
   useEffect(() => {
     fetch('/api/config')
-        .then(res => res.json())
+        .then(async (res) => {
+          // 🛑 에러 처리 강화: 응답이 실패하면 텍스트로 에러 메시지를 읽음
+          if (!res.ok) {
+            const errorText = await res.text();
+            throw new Error(errorText || `서버 오류 (${res.status})`);
+          }
+          return res.json();
+        })
         .then(data => {
-          // DB의 문자열("헬멧,작업화")을 배열로 변환
           const equipArray = data.requiredEquipment
               ? (data.requiredEquipment.split(',').filter(Boolean) as Equipment[])
               : [];
@@ -57,22 +59,19 @@ export function SystemSettings() {
           setWarningDelay(data.warningDelaySeconds || 10);
           setAdminPassword(data.adminPassword || '');
 
-          // 원본 데이터 저장 (비교용)
           setServerData(data);
           setLoading(false);
         })
         .catch(err => {
           console.error("설정 로드 실패:", err);
-          toast.error("설정을 불러오지 못했습니다.");
+          // 사용자에게 구체적인 에러 메시지 표시
+          toast.error(`설정을 불러오지 못했습니다: ${err.message}`);
           setLoading(false);
         });
   }, []);
 
-  // 2. 변경 사항 감지 로직
   useEffect(() => {
     if (!serverData) return;
-
-    // 현재 상태를 DB 포맷(문자열)으로 변환하여 비교
     const currentEquipStr = selectedEquipment.sort().join(',');
     const serverEquipStr = (serverData.requiredEquipment || '').split(',').sort().join(',');
 
@@ -83,7 +82,6 @@ export function SystemSettings() {
     setHasChanges(hasEquipmentChanges || hasDelayChanges || hasPasswordChanges);
   }, [selectedEquipment, warningDelay, adminPassword, serverData]);
 
-  // 보호구 토글 핸들러
   const toggleEquipment = (equipment: Equipment) => {
     setSelectedEquipment(prev =>
         prev.includes(equipment)
@@ -92,10 +90,8 @@ export function SystemSettings() {
     );
   };
 
-  // 3. 저장 핸들러 (API 호출)
   const handleSave = async () => {
     const payload = {
-      // 배열을 쉼표로 구분된 문자열로 변환하여 전송
       requiredEquipment: selectedEquipment.join(','),
       warningDelaySeconds: warningDelay,
       adminPassword: adminPassword,
@@ -110,7 +106,7 @@ export function SystemSettings() {
 
       if (response.ok) {
         const updatedData = await response.json();
-        setServerData(updatedData); // 원본 데이터 업데이트
+        setServerData(updatedData);
         setHasChanges(false);
         toast.success("설정이 DB에 저장되었습니다.");
       } else {

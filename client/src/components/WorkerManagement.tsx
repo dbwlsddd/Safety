@@ -23,7 +23,7 @@ interface WorkerManagementProps {
   onBulkDelete: (ids: string[]) => void;
 }
 
-export function WorkerManagement({
+export default function WorkerManagement({
                                    workers,
                                    onAddWorker,
                                    onUpdateWorker,

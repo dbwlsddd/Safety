@@ -8,7 +8,7 @@ interface MonitoringScreenProps {
   onBack: () => void;
 }
 
-export function MonitoringScreen({ requiredEquipment, onBack }: MonitoringScreenProps) {
+export default function MonitoringScreen({ requiredEquipment, onBack }: MonitoringScreenProps) {
   const [detectedEquipment, setDetectedEquipment] = useState<Equipment[]>([]);
   const [showWarning, setShowWarning] = useState(false);
   const [missingEquipment, setMissingEquipment] = useState<Equipment[]>([]);

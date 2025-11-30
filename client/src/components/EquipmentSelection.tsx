@@ -34,7 +34,7 @@ const equipmentOptions: EquipmentOption[] = [
   { name: "하네스", icon: Anchor },
 ];
 
-export function EquipmentSelection({
+export default function EquipmentSelection({
   onStartMonitoring,
 }: EquipmentSelectionProps) {
   const [selectedEquipment, setSelectedEquipment] = useState<

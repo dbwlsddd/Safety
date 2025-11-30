@@ -8,7 +8,7 @@ interface Detection {
   confidence: number;
 }
 
-export function InspectionScreen() {
+export default function InspectionScreen() {
   // <video> 태그를 제어하기 위한 ref
   const videoRef = useRef<HTMLVideoElement>(null);
 
