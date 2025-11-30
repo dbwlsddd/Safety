@@ -13,7 +13,7 @@ export type Equipment =
 export type WorkerStatus = 'WORKING' | 'RESTING' | 'OFF_WORK';
 
 export interface Worker {
-  id: number;
+  id: string;
   employeeNumber: string;
   name: string;
   team: string;

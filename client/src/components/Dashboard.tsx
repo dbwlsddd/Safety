@@ -6,7 +6,7 @@ interface DashboardProps {
   logs: AccessLogEntry[];
 }
 
-export default function Dashboard({ logs }: DashboardProps) {
+export function Dashboard({ logs }: DashboardProps) {
   // 통계 계산
   const today = new Date();
   today.setHours(0, 0, 0, 0);
