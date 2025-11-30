@@ -24,7 +24,7 @@ interface AdminDashboardProps {
 
 type MenuItem = 'dashboard' | 'workers' | 'logs' | 'settings';
 
-export default function AdminDashboard({
+export function AdminDashboard({
                                  workers,
                                  logs,
                                  config,
