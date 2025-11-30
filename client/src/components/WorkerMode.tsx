@@ -238,7 +238,7 @@ export function WorkerMode({
 
             <div className="absolute inset-0 border-[20px] border-black/50 pointer-events-none z-10"></div>
 
-            <div className="absolute bottom-6 bg-slate-900/80 px-6 py-2 rounded-full border border-cyan-500/30 z-20">
+            <div className="absolute bottom-6 bg-gray-900/80 px-6 py-2 rounded-full border border-cyan-500/30 z-20">
               <p className="text-gray-400 font-semibold">{recognitionStatus}</p>
             </div>
           </div>
