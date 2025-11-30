@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/config")
@@ -43,5 +44,19 @@ public class SystemConfigController {
         currentConfig.setRequiredEquipment(newConfig.getRequiredEquipment());
 
         return ResponseEntity.ok(configRepository.save(currentConfig));
+    }
+
+    @PostMapping("/verify-admin")
+    public ResponseEntity<?> verifyAdminPassword(@RequestBody Map<String, String> payload) {
+        String inputPassword = payload.get("password");
+
+        // DB에서 저장된 설정 가져오기
+        SystemConfig config = configRepository.findAll().get(0);
+
+        if (config.getAdminPassword().equals(inputPassword)) {
+            return ResponseEntity.ok().build(); // 200 OK
+        } else {
+            return ResponseEntity.status(401).body("비밀번호 불일치"); // 401 Unauthorized
+        }
     }
 }

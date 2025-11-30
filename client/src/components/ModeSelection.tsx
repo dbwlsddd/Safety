@@ -1,4 +1,5 @@
-import { Shield, Users, ArrowRight, Zap } from 'lucide-react';
+//import { Shield, Users, ArrowRight, Zap } from 'lucide-react';
+import { Shield, Users, ArrowRight, Zap, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
@@ -9,18 +10,45 @@ interface ModeSelectionProps {
   adminPassword?: string;
 }
 
-export function ModeSelection({ onSelectMode, adminPassword = '1234' }: ModeSelectionProps) {
+// export function ModeSelection({ onSelectMode, adminPassword = '1234' }: ModeSelectionProps) {
+export function ModeSelection({ onSelectMode }: ModeSelectionProps) {
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false); // 1130 추가
 
-  const handlePasswordSubmit = () => {
-    // ✅ 하드코딩된 '1234'를 prop으로 받은 adminPassword로 변경
-    if (password === adminPassword) {
-      setShowPasswordDialog(false);
-      onSelectMode('admin');
-    } else {
-      setError('비밀번호가 올바르지 않습니다.');
+  const handlePasswordSubmit = async () => {
+    if (!password) {
+      setError('비밀번호를 입력해주세요.');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      // 🚀 백엔드 API 호출 (예시 경로: /api/config/verify-admin)
+      const response = await fetch('https://100.64.239.86:8443/api/config/verify-admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ password: password }),
+      });
+
+      if (response.ok) {
+        // 인증 성공
+        setShowPasswordDialog(false);
+        onSelectMode('admin');
+      } else {
+        // 인증 실패 (401 Unauthorized 등)
+        setError('비밀번호가 올바르지 않습니다.');
+      }
+    } catch (err) {
+      setError('서버 통신 중 오류가 발생했습니다.');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -213,15 +241,21 @@ export function ModeSelection({ onSelectMode, adminPassword = '1234' }: ModeSele
                 <Button
                     variant="outline"
                     onClick={() => setShowPasswordDialog(false)}
+                    disabled={isLoading} // 로딩 중 클릭 방지
                     className="bg-slate-900 border-slate-800 text-gray-300 hover:bg-slate-800 hover:text-white font-semibold rounded-xl text-sm"
                 >
                   취소
                 </Button>
                 <Button
                     onClick={handlePasswordSubmit}
-                    className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold shadow-lg shadow-blue-500/30 rounded-xl text-sm"
+                    disabled={isLoading} // 로딩 중 클릭 방지
+                    className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold shadow-lg shadow-blue-500/30 rounded-xl text-sm min-w-[80px]"
                 >
-                  확인
+                  {isLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" /> // 로딩 스피너
+                  ) : (
+                      '확인'
+                  )}
                 </Button>
               </div>
             </div>
